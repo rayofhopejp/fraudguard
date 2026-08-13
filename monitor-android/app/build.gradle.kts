@@ -47,10 +47,38 @@ android {
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
     }
 
+    /**
+     * 配布用の署名。鍵とパスワードはリポジトリに入れない(いずれも .gitignore 済み)。
+     *
+     * この鍵が漏れると、同じ署名の偽アプリを作れてしまう。監視対象の端末で
+     * 通話・SMS・通知アクセスを持つアプリなので、影響が特に大きい。
+     *
+     * 鍵が変わると同一アプリとして上書きインストールできなくなるため、
+     * 一度作ったら使い続けること(作り直すと家族の端末で入れ直しになる)。
+     */
+    signingConfigs {
+        create("release") {
+            val storePath = localProperty("fraudguard.keystorePath")
+                ?: System.getenv("FRAUDGUARD_KEYSTORE_PATH")
+            val store = storePath?.let { file(it) }
+            if (store != null && store.exists()) {
+                storeFile = store
+                storePassword = localProperty("fraudguard.keystorePassword")
+                    ?: System.getenv("FRAUDGUARD_KEYSTORE_PASSWORD")
+                keyAlias = localProperty("fraudguard.keyAlias") ?: "fraudguard"
+                keyPassword = localProperty("fraudguard.keyPassword")
+                    ?: System.getenv("FRAUDGUARD_KEY_PASSWORD")
+                    ?: storePassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // 鍵が用意されていない環境では署名なしでビルドする(CI等でビルドだけ確認したい場合)。
+            signingConfig = signingConfigs.getByName("release").takeIf { it.storeFile != null }
         }
     }
 

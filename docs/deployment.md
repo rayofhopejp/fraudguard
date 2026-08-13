@@ -354,7 +354,42 @@ cd monitor-android
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-配布用にはリリース署名を固定しておく(鍵が変わると上書きインストールできない)。`keytool` で作成した keystore のパスとパスワードは環境変数から読み、リポジトリに入れない。
+### 配布用APKのビルド
+
+家族に配るAPKは**リリースビルド**にすること。デバッグビルドは `debuggable` が立っており、
+`adb` が使える相手なら `run-as` でアプリのデータ領域(暗号化して保存したペアリング情報やイベントDB)を
+読み出せてしまう。監視対象の端末に入れるアプリとしては配ってはいけない。
+
+署名鍵は `monitor-android/keystore/`(gitignore済み)に置き、パスとパスワードを
+`local.properties` に書く。
+
+```properties
+fraudguard.keystorePath=/絶対パス/monitor-android/keystore/fraudguard-release.jks
+fraudguard.keystorePassword=...
+fraudguard.keyAlias=fraudguard
+```
+
+```bash
+cd monitor-android && ./gradlew assembleRelease
+# app/build/outputs/apk/release/app-release.apk
+```
+
+**鍵は作り直さないこと。** 署名が変われば同一アプリとして上書きインストールできず、
+家族の端末で一度アンインストールしてから入れ直すことになる(ペアリングと権限もやり直し)。
+鍵が漏れた場合も同じで、同じ署名の偽アプリを作られてしまう。通話・SMS・通知アクセスを持つ
+アプリなので影響が大きい。
+
+配布前の確認:
+
+```bash
+BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+"$BT/apksigner" verify --print-certs app-release.apk        # 署名されているか
+"$BT/aapt2" dump badging app-release.apk | grep debuggable  # 何も出なければOK
+unzip -p app-release.apk classes2.dex | strings | grep -oE "https://[a-z0-9.-]+/"  # 接続先が正しいか
+```
+
+最後の確認は省かないこと。`fraudguard.apiBaseUrl` の指定を忘れるとプレースホルダのURLが
+焼き込まれ、**エラーを一切出さずにイベントが端末内に溜まり続ける**。
 
 ### C4. ペアリング
 
