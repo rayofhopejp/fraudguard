@@ -11,12 +11,28 @@ import com.fraudguard.server.push.FcmClientProvider
 import com.fraudguard.server.security.CommandKeys
 import io.ktor.server.application.Application
 import io.ktor.server.application.log
+import io.ktor.server.config.ApplicationConfig
+import io.ktor.server.engine.applicationEngineEnvironment
+import io.ktor.server.engine.connector
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import kotlinx.coroutines.launch
 
+/**
+ * 単純な `embeddedServer(Netty, port = ..., module = ...)` は src/main/resources/application.conf を
+ * 読み込まない(Ktorの規約的なEngineMain経由のブートストラップでのみHOCON設定が読まれるため)。
+ * それに気づかずこの形で書いていたため、DATABASE_URL等の環境変数が実際には一切反映されない
+ * 状態でリリースされかけていた(ローカル実機テストで発覚)。ApplicationConfigを明示的に渡す。
+ */
 fun main(args: Array<String>) {
-    embeddedServer(Netty, port = 8080, module = Application::module).start(wait = true)
+    val environment = applicationEngineEnvironment {
+        config = ApplicationConfig("application.conf")
+        connector {
+            port = System.getenv("PORT")?.toIntOrNull() ?: 8080
+        }
+        module(Application::module)
+    }
+    embeddedServer(Netty, environment).start(wait = true)
 }
 
 fun Application.module() {

@@ -54,11 +54,17 @@ fun DialerScreen(initialNumber: String = "", onCall: (String) -> Unit) {
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 DIALPAD_KEYS.forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         row.forEach { key ->
+                            // weight(1f)で行内を3等分してからaspectRatioで正方形にする。
+                            // weightが無いとボタンが「画面幅いっぱい×正方形」に膨張して画面外へはみ出す
+                            // (実機テストで発覚。エミュレータ無しのコンパイル確認だけでは気づけなかった)。
                             OutlinedButton(
                                 onClick = { number += key },
-                                modifier = Modifier.aspectRatio(1f),
+                                modifier = Modifier.weight(1f).aspectRatio(1f),
                             ) {
                                 Text(text = key, fontSize = 24.sp)
                             }

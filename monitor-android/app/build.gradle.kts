@@ -1,3 +1,7 @@
+// build.gradle.kts内では `java` がGradleのjava拡張を指してしまい java.util.* が解決できないため、
+// 明示的にimportする。
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -13,6 +17,13 @@ if (file("google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
 }
 
+/** local.properties(gitignore済み)から値を読む。実機テスト用のURLをコミットせずに済ませるため。 */
+fun localProperty(key: String): String? {
+    val file = rootProject.file("local.properties")
+    if (!file.exists()) return null
+    return Properties().apply { file.inputStream().use { load(it) } }.getProperty(key)
+}
+
 android {
     namespace = "com.fraudguard.monitor"
     compileSdk = 34
@@ -24,6 +35,16 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.1.0"
+
+        // requirements.md 23章: サーバーのエンドポイント。ローカル実機テストでは一時的なトンネルURL等を
+        // 使うため、ソースを書き換えずにビルド時へ差し替えられるようにする。
+        //   ./gradlew assembleDebug -Pfraudguard.apiBaseUrl=https://xxxx.trycloudflare.com/
+        // または local.properties(gitignore済み)に fraudguard.apiBaseUrl=... を書く。
+        // Retrofitの制約でURLは "/" で終える必要がある。
+        val apiBaseUrl = (project.findProperty("fraudguard.apiBaseUrl") as String?)
+            ?: localProperty("fraudguard.apiBaseUrl")
+            ?: "https://api.fraudguard.example.com/"
+        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
     }
 
     buildTypes {
@@ -35,6 +56,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {

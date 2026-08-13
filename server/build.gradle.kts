@@ -79,3 +79,11 @@ tasks.withType<KotlinCompile> {
 tasks.test {
     useJUnitPlatform()
 }
+
+// ローカル実機テスト用: Cognitoを経由せずDBへ直接テストデータを作成する開発ツール(本番では未使用)。
+tasks.register<JavaExec>("seedTestDevice") {
+    group = "application"
+    description = "Seed a local family user + device + pairing code directly into the DB (dev only)"
+    mainClass.set("com.fraudguard.server.tools.SeedTestDeviceKt")
+    classpath = sourceSets["main"].runtimeClasspath
+}

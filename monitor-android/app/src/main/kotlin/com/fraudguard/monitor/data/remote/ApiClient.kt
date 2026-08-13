@@ -1,5 +1,6 @@
 package com.fraudguard.monitor.data.remote
 
+import com.fraudguard.monitor.BuildConfig
 import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -12,8 +13,9 @@ import retrofit2.converter.kotlinx.serialization.asConverterFactory
  * TODO: BASE_URLを本番/開発でビルドバリアント切り替え。
  */
 object ApiClient {
-    // TODO: 実際のLightsailエンドポイントに置き換え。Retrofitの制約でパスは "/" で終える必要がある。
-    private const val BASE_URL = "https://api.fraudguard.example.com/"
+    // app/build.gradle.kts の buildConfigField 経由。実機テスト時は
+    // -Pfraudguard.apiBaseUrl=... または local.properties で差し替える(ソースの書き換え不要)。
+    private val BASE_URL = BuildConfig.API_BASE_URL
 
     /** @param baseUrl テスト時にMockWebServer等へ差し替えるためのフック。通常は省略してよい。 */
     fun create(baseUrl: String = BASE_URL, apiKeyProvider: () -> String?): ApiService {
