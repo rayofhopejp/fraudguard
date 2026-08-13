@@ -18,6 +18,18 @@ repositories {
     mavenCentral()
 }
 
+// requirements.md 36章: Lightsail上ではfat JARとして動かす。
+// Ktorのfat JAR(Shadow)は既定でMETA-INF/servicesを「マージせず上書き」するため、
+// 同じサービスファイルを持つ依存が複数あると後勝ちで消える。
+// Flyway 10はプラグイン方式で、flyway-coreが21件、flyway-database-postgresqlが2件を
+// 同じファイル名で登録しており、上書きによってcoreの21件が丸ごと失われていた。
+// その結果、Flywayは正しい名前のマイグレーションを「命名規則に合わない」として読み飛ばし、
+// **スキーマが空のままサーバーが正常起動する**という状態になっていた(デプロイして初めて発覚。
+// ./gradlew run はリソースをディレクトリから読むため再現しない)。
+tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
+    mergeServiceFiles()
+}
+
 val ktorVersion = "2.3.12"
 val exposedVersion = "0.49.0"
 

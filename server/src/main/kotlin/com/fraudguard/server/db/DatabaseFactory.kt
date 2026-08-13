@@ -10,11 +10,20 @@ object DatabaseFactory {
 
     fun init(jdbcUrl: String, user: String, password: String): DataSource {
         val dataSource = createDataSource(jdbcUrl, user, password)
-        Flyway.configure()
+        // validateMigrationNamingを立てるのは必須。既定では、命名規則に合わないと判断した
+        // マイグレーションをFlywayはINFOログ1行だけ出して読み飛ばし、そのまま起動してしまう。
+        // 空のスキーマのままAPIが200を返す状態は、この仕組みでは最も危険な壊れ方
+        // (家族から見ると「動いている」が、イベントは1件も保存されない)。
+        val flyway = Flyway.configure()
             .dataSource(dataSource)
             .locations("classpath:db/migration")
+            .validateMigrationNaming(true)
             .load()
-            .migrate()
+        // 「見つかった数」を確認する。「適用した数」ではない(適用済みなら0件が正常)。
+        check(flyway.info().all().isNotEmpty()) {
+            "No migrations found on the classpath. The packaged artifact is missing db/migration."
+        }
+        flyway.migrate()
         Database.connect(dataSource)
         return dataSource
     }
