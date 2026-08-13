@@ -2,6 +2,7 @@ package com.fraudguard.monitor.call
 
 import android.content.Intent
 import android.telecom.Call
+import android.telecom.CallAudioState
 import android.telecom.InCallService
 import android.telecom.VideoProfile
 import com.fraudguard.monitor.FraudGuardApplication
@@ -288,6 +289,18 @@ class FraudGuardInCallService : InCallService() {
         val call = activeCalls[callId] ?: return false
         call.answer(VideoProfile.STATE_AUDIO_ONLY)
         return true
+    }
+
+    /**
+     * requirements.md 4.3章[v2]: 通話中の音声操作。標準の電話アプリを置き換える以上ここも代替が要る。
+     * 親クラスの setMuted と同名にすると呼び出し先が紛らわしいため、別の名前にしている。
+     */
+    fun applyMuted(muted: Boolean) {
+        setMuted(muted)
+    }
+
+    fun applySpeaker(on: Boolean) {
+        setAudioRoute(if (on) CallAudioState.ROUTE_SPEAKER else CallAudioState.ROUTE_EARPIECE)
     }
 
     fun reject(callId: String): Boolean {

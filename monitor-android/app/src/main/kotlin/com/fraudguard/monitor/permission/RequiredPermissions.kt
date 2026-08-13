@@ -19,6 +19,7 @@ object RequiredPermissions {
         val permissions = mutableListOf(
             Manifest.permission.READ_PHONE_STATE,
             Manifest.permission.READ_CALL_LOG,
+            Manifest.permission.READ_CONTACTS,
             Manifest.permission.RECEIVE_SMS,
             Manifest.permission.READ_SMS,
         )
@@ -42,6 +43,7 @@ object RequiredPermissions {
     fun label(permission: String): String = when (permission) {
         Manifest.permission.READ_PHONE_STATE -> "通話の状態(着信/発信の検知に使用します)"
         Manifest.permission.READ_CALL_LOG -> "通話履歴(電話番号の取得に使用します)"
+        Manifest.permission.READ_CONTACTS -> "連絡先(着信画面に相手の名前を表示します)"
         Manifest.permission.RECEIVE_SMS -> "SMSの受信(詐欺兆候のあるSMSを検知します)"
         Manifest.permission.READ_SMS -> "SMSの読み取り(詐欺兆候のあるSMSを検知します)"
         Manifest.permission.POST_NOTIFICATIONS -> "通知の表示(監視状態のお知らせに使用します)"

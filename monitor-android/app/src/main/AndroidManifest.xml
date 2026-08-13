@@ -6,6 +6,12 @@
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
 
+    <!--
+        requirements.md 4.3章[v2]: 着信画面に相手の名前を出すために使う。
+        未許可でもホワイトリストの表示名で動作するため必須ではない。
+    -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
     <!-- requirements.md 9章: SMS監視 -->
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.READ_SMS" />

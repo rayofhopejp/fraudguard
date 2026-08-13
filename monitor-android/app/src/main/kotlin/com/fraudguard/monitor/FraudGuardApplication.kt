@@ -5,6 +5,7 @@ import android.content.Context
 import com.fraudguard.monitor.appinstall.AppInstallScanner
 import com.fraudguard.monitor.appinstall.AppLaunchDetector
 import com.fraudguard.monitor.call.AppCallRegistry
+import com.fraudguard.monitor.call.CallerIdentityResolver
 import com.fraudguard.monitor.call.FraudGuardInCallService
 import com.fraudguard.monitor.data.EventReporter
 import com.fraudguard.monitor.data.local.AppDatabase
@@ -37,6 +38,10 @@ class FraudGuardApplication : Application() {
     lateinit var appCallRegistry: AppCallRegistry
         private set
 
+    /** requirements.md 4.3章[v2]: 着信画面に出す「相手が誰か」の解決。 */
+    lateinit var callerIdentityResolver: CallerIdentityResolver
+        private set
+
     override fun onCreate() {
         super.onCreate()
         database = AppDatabase.getInstance(this)
@@ -53,6 +58,7 @@ class FraudGuardApplication : Application() {
         )
 
         appCallRegistry = AppCallRegistry(eventReporter, CoroutineScope(Dispatchers.IO))
+        callerIdentityResolver = CallerIdentityResolver(this, database.whitelistDao())
 
         // requirements.md 11章: アプリ起動時にも新規インストールを走査する。
         // ペアリング直後にベースラインを確実に作るためと、端末再起動後などに

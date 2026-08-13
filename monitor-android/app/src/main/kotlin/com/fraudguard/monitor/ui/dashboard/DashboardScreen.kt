@@ -3,7 +3,11 @@ package com.fraudguard.monitor.ui.dashboard
 import android.app.role.RoleManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.content.Intent
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
@@ -17,6 +21,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.fraudguard.monitor.call.DialerActivity
 import androidx.core.content.getSystemService
 
 /**
@@ -37,8 +43,20 @@ fun DashboardScreen() {
     }
 
     Scaffold { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp)) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
             Text(text = "監視中です")
+
+            // requirements.md 4.3章[v2]: デフォルト電話アプリになると、この端末で電話をかける導線は
+            // このアプリだけになる。ホームから必ず辿り着けるようにしておく。
+            Button(
+                modifier = Modifier.fillMaxWidth().height(64.dp),
+                onClick = { context.startActivity(Intent(context, DialerActivity::class.java)) },
+            ) {
+                Text(text = "電話をかける", fontSize = 20.sp)
+            }
             // TODO: HeartbeatWorkerの直近送信状態、権限の有効/無効を表示
 
             if (isDialerRoleHeld) {
