@@ -46,6 +46,8 @@ dependencies {
     implementation("io.ktor:ktor-server-status-pages-jvm:$ktorVersion")
     // requirements.md 23章: Family Webは別ドメインからブラウザ経由でAPIを呼ぶためCORSが要る。
     implementation("io.ktor:ktor-server-cors-jvm:$ktorVersion")
+    // Caddyの背後で動くため、元のスキーム/ホストをX-Forwarded-*から復元する。
+    implementation("io.ktor:ktor-server-forwarded-header-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-request-validation:$ktorVersion")
 
     // Ktor client (outbound calls: FCM)

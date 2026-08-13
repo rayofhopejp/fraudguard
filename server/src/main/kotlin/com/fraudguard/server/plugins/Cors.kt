@@ -6,6 +6,7 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.application.log
 import io.ktor.server.plugins.cors.routing.CORS
+import io.ktor.server.plugins.forwardedheaders.XForwardedHeaders
 
 /**
  * requirements.md 23章: Family WebはAPIサーバーと別ドメインで動くため、
@@ -19,6 +20,12 @@ import io.ktor.server.plugins.cors.routing.CORS
  * 呼び出しはCORSの対象外なので、未設定でも監視機能そのものには影響しない。
  */
 fun Application.configureCors() {
+    // Caddyの背後で動くため、これが無いとKtorは自分のオリジンを http:// だと認識する。
+    // するとブラウザが送る Origin: https://... と食い違い、同一オリジンのフォーム送信すら
+    // 別オリジン扱いで403になる(「家族の通話としてマーク」の確認画面がまさにこれで弾かれた)。
+    // アプリのポートは外部に公開しておらず、到達経路がCaddyのみのためこのヘッダを信頼できる。
+    install(XForwardedHeaders)
+
     val origin = environment.config.propertyOrNull("familyWebOrigin")?.getString().orEmpty()
     if (origin.isBlank()) {
         log.warn("FAMILY_WEB_ORIGIN not set; the Family Web will not be able to call this API from a browser")
