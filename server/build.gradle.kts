@@ -44,6 +44,8 @@ dependencies {
     implementation("com.auth0:jwks-rsa:0.22.1")
     implementation("io.ktor:ktor-server-call-logging-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-status-pages-jvm:$ktorVersion")
+    // requirements.md 23章: Family Webは別ドメインからブラウザ経由でAPIを呼ぶためCORSが要る。
+    implementation("io.ktor:ktor-server-cors-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-request-validation:$ktorVersion")
 
     // Ktor client (outbound calls: FCM)

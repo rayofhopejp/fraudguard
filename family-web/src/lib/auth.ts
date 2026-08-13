@@ -17,6 +17,10 @@ export const authOptions: NextAuthOptions = {
       clientId: process.env.COGNITO_CLIENT_ID ?? "",
       clientSecret: process.env.COGNITO_CLIENT_SECRET ?? "",
       issuer: process.env.COGNITO_ISSUER,
+      // スコープを明示する。既定ではopenidのみが要求され、id_tokenにemailクレームが載らない。
+      // サーバー側(FamilyUserRepository.resolveOrCreate)はsubとemailで家族ユーザーを作るため、
+      // emailが無いと家族の識別ができない。
+      authorization: { params: { scope: "openid email profile" } },
     }),
   ],
   callbacks: {

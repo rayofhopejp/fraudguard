@@ -2,6 +2,7 @@ package com.fraudguard.server
 
 import com.fraudguard.server.db.DatabaseFactory
 import com.fraudguard.server.db.repository.HeartbeatWatchdog
+import com.fraudguard.server.plugins.configureCors
 import com.fraudguard.server.plugins.configureMonitoring
 import com.fraudguard.server.plugins.configureRouting
 import com.fraudguard.server.plugins.configureSecurity
@@ -75,6 +76,7 @@ fun Application.module() {
     launch { HeartbeatWatchdog.run() }
 
     configureSerialization()
+    configureCors()
     configureSecurity()
     configureMonitoring()
     configureRouting()
