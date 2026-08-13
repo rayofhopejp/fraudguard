@@ -9,12 +9,11 @@ import com.fraudguard.server.domain.model.Event
  * (FCMは8章の遠隔コマンド配信(Monitorアプリへのdata message)専用の用途として別途検討する)。
  */
 interface FamilyNotifier {
-    suspend fun notify(event: Event, deviceName: String)
+    /** @return 実際に配信できたか。失敗を握りつぶすと「警告が来ない=平常」と誤解されるため呼び出し元へ返す。 */
+    suspend fun notify(event: Event, deviceName: String): Boolean
 }
 
-/** Webhook未設定のローカル開発環境向け。何もしない。 */
+/** Webhook未設定のローカル開発環境向け。何もしない(未配信として返す)。 */
 class NoopFamilyNotifier : FamilyNotifier {
-    override suspend fun notify(event: Event, deviceName: String) {
-        // 意図的に何もしない。
-    }
+    override suspend fun notify(event: Event, deviceName: String): Boolean = false
 }

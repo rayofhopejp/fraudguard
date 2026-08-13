@@ -88,6 +88,13 @@ tasks.register<JavaExec>("seedTestDevice") {
     classpath = sourceSets["main"].runtimeClasspath
 }
 
+tasks.register<JavaExec>("sendTestNotification") {
+    group = "application"
+    description = "Send a sample CRITICAL alert to the configured Slack webhook (dev only)"
+    mainClass.set("com.fraudguard.server.tools.SendTestNotificationKt")
+    classpath = sourceSets["main"].runtimeClasspath
+}
+
 tasks.register<JavaExec>("issueDisconnectCommand") {
     group = "application"
     description = "Issue a signed DISCONNECT_CALL command for the device's latest call (dev only)"

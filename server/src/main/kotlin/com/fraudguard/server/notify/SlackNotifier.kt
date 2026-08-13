@@ -6,17 +6,21 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
+import io.ktor.http.isSuccess
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import org.slf4j.LoggerFactory
 
 /** requirements.md 2.2章: Slack Incoming Webhookへのリスクイベント通知。 */
 class SlackNotifier(private val webhookUrl: String) : FamilyNotifier {
+    private val logger = LoggerFactory.getLogger(SlackNotifier::class.java)
     private val client = HttpClient(CIO)
     private val json = Json { encodeDefaults = true }
 
-    override suspend fun notify(event: Event, deviceName: String) {
+    override suspend fun notify(event: Event, deviceName: String): Boolean {
         val message = SlackMessage(
             text = "[${event.riskLevel}] $deviceName: ${event.title}",
             attachments = listOf(
@@ -28,9 +32,23 @@ class SlackNotifier(private val webhookUrl: String) : FamilyNotifier {
                 ),
             ),
         )
-        client.post(webhookUrl) {
-            contentType(ContentType.Application.Json)
-            setBody(json.encodeToString(SlackMessage.serializer(), message))
+        // 通知経路が黙って壊れるのは詐欺検知として致命的なため、必ず結果を確認してログに残す
+        // (WebhookのrevokeやSlack側の障害に気づけないと、家族は「警告が来ていない=平常」と誤解する)。
+        return try {
+            val response = client.post(webhookUrl) {
+                contentType(ContentType.Application.Json)
+                setBody(json.encodeToString(SlackMessage.serializer(), message))
+            }
+            if (!response.status.isSuccess()) {
+                // requirements.md 25章: WebhookのURL自体が認証情報のため、URLも本文もログに出さない。
+                logger.error("Slack notification failed: status=${response.status.value} body=${response.bodyAsText()}")
+                false
+            } else {
+                true
+            }
+        } catch (e: Exception) {
+            logger.error("Slack notification failed to send: ${e.message}")
+            false
         }
     }
 
