@@ -1,0 +1,40 @@
+# --- General ---
+.DS_Store
+*.log
+.env
+.env.local
+*.env
+
+# --- Gradle / Kotlin / Android (server, monitor-android) ---
+.gradle/
+build/
+out/
+*.class
+local.properties
+.idea/
+*.iml
+.kotlin/
+captures/
+*.jks
+*.keystore
+
+# Android specific
+monitor-android/app/release/
+monitor-android/app/debug/
+monitor-android/**/build/
+
+# --- Node / Next.js (family-web) ---
+node_modules/
+family-web/.next/
+family-web/out/
+family-web/.turbo/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-store/
+
+# --- Secrets (never commit) ---
+**/secrets/
+**/*.pem
+**/*.key
+!**/*.pub.key

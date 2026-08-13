@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- requirements.md 4.3章[v2]: 通話「監視」自体はROLE_DIALER不要。READ_PHONE_STATEのみで着信/発信/通話時間を取得する。 -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+
+    <!-- requirements.md 9章: SMS監視 -->
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <uses-permission android:name="android.permission.READ_SMS" />
+
+    <!-- requirements.md 11章: 新規アプリインストール監視(パッケージ名からアプリ名取得のため) -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
+    <!-- requirements.md 16章: FCM Push受信 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- requirements.md 30章: Android再起動後も監視が復帰可能であること -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+
+    <!-- requirements.md 8章, 4.3章[v2]: ROLE_DIALER(デフォルト電話アプリ)化のための権限。 -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
+
+    <application
+        android:name=".FraudGuardApplication"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.FraudGuardMonitor">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.FraudGuardMonitor">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- requirements.md 4.3章[v2]: ROLE_DIALER不要な軽量版の通話監視サービス -->
+        <service
+            android:name=".call.CallMonitorService"
+            android:exported="false"
+            android:foregroundServiceType="phoneCall" />
+
+        <!-- requirements.md 10.2章: LINE/Telegram/Signal等の通知監視。ユーザーが設定画面で個別許可が必要。 -->
+        <service
+            android:name=".notification.FraudGuardNotificationListenerService"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- requirements.md 9章: SMS受信監視 -->
+        <receiver
+            android:name=".sms.SmsReceivedReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_SMS">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- requirements.md 11章: 新規アプリインストール監視 -->
+        <receiver
+            android:name=".appinstall.PackageInstallReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.PACKAGE_ADDED" />
+                <data android:scheme="package" />
+            </intent-filter>
+        </receiver>
+
+        <!-- requirements.md 30章: 端末再起動後の監視復帰 -->
+        <receiver
+            android:name=".BootCompletedReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+            requirements.md 4.3章[v2], 8章: ROLE_DIALER(デフォルト電話アプリ)取得で有効化するInCallService。
+            AOSPのDIALERロール定義はACTION_DIALハンドラ(DialerActivity)とこのInCallServiceの両方を
+            要求するため、両方を揃えて登録している。ユーザーがROLE_DIALERを実際に付与するまでは
+            システムはこのサービスをバインドしない(付与前でも宣言自体は安全)。
+        -->
+        <service
+            android:name=".call.FraudGuardInCallService"
+            android:exported="true"
+            android:permission="android.permission.BIND_INCALL_SERVICE">
+            <meta-data android:name="android.telecom.IN_CALL_SERVICE_UI" android:value="true" />
+            <intent-filter>
+                <action android:name="android.telecom.InCallService" />
+            </intent-filter>
+        </service>
+
+        <!-- requirements.md 4.3章[v2]: DIALERロール取得の必須要件(ACTION_DIALハンドラ)。実際に発信できる。 -->
+        <activity
+            android:name=".call.DialerActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.FraudGuardMonitor">
+            <intent-filter>
+                <action android:name="android.intent.action.DIAL" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.DIAL" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="tel" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            requirements.md 4.3章[v2]: FraudGuardInCallServiceが着信/通話開始時に起動する自前UI。
+            外部から直接起動する経路は不要なため未エクスポート。
+        -->
+        <activity
+            android:name=".call.InCallActivity"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:theme="@style/Theme.FraudGuardMonitor" />
+
+        <service
+            android:name=".push.FraudGuardMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+    </application>
+</manifest>

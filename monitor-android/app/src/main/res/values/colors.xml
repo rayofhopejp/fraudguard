@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="fraudguard_primary">#1B3A57</color>
+    <color name="fraudguard_on_primary">#FFFFFF</color>
+    <color name="fraudguard_critical">#C62828</color>
+    <color name="fraudguard_warning">#F9A825</color>
+</resources>
