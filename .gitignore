@@ -40,3 +40,6 @@ yarn-error.log*
 **/*.pem
 **/*.key
 !**/*.pub.key
+
+# 稼働環境の実際の値(識別子を公開リポジトリに残さないため)
+*.local.md

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,7 +32,7 @@ import androidx.core.content.getSystemService
  * TODO: 監視状態(通知アクセス有効/無効等)の表示、直近のリスクイベント件数、ペアリング解除導線。
  */
 @Composable
-fun DashboardScreen() {
+fun DashboardScreen(onBack: () -> Unit = {}) {
     val context = LocalContext.current
     val roleManager = remember { context.getSystemService<RoleManager>() }
     var isDialerRoleHeld by remember { mutableStateOf(roleManager?.isRoleHeld(RoleManager.ROLE_DIALER) == true) }
@@ -49,14 +50,7 @@ fun DashboardScreen() {
         ) {
             Text(text = "監視中です")
 
-            // requirements.md 4.3章[v2]: デフォルト電話アプリになると、この端末で電話をかける導線は
-            // このアプリだけになる。ホームから必ず辿り着けるようにしておく。
-            Button(
-                modifier = Modifier.fillMaxWidth().height(64.dp),
-                onClick = { context.startActivity(Intent(context, DialerActivity::class.java)) },
-            ) {
-                Text(text = "電話をかける", fontSize = 20.sp)
-            }
+            TextButton(onClick = onBack) { Text("← 電話に戻る", fontSize = 18.sp) }
             // TODO: HeartbeatWorkerの直近送信状態、権限の有効/無効を表示
 
             if (isDialerRoleHeld) {

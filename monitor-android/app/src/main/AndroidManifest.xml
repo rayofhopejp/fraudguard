@@ -48,9 +48,15 @@
         android:label="@string/app_name"
         android:theme="@style/Theme.FraudGuardMonitor">
 
+        <!--
+            requirements.md 4.3章[v2]: 画面は縦固定。横向きにすると、着信中に回転で再レイアウトが起き、
+            応答/拒否の位置が変わって押し間違いのもとになる。この端末の利用者にとって実害が大きい。
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:screenOrientation="portrait"
+            tools:ignore="LockedOrientationActivity"
             android:theme="@style/Theme.FraudGuardMonitor">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -133,6 +139,8 @@
             android:name=".call.DialerActivity"
             android:exported="true"
             android:launchMode="singleTop"
+            android:screenOrientation="portrait"
+            tools:ignore="LockedOrientationActivity"
             android:theme="@style/Theme.FraudGuardMonitor">
             <intent-filter>
                 <action android:name="android.intent.action.DIAL" />
@@ -153,6 +161,8 @@
             android:name=".call.InCallActivity"
             android:exported="false"
             android:launchMode="singleInstance"
+            android:screenOrientation="portrait"
+            tools:ignore="LockedOrientationActivity"
             android:showWhenLocked="true"
             android:turnScreenOn="true"
             android:theme="@style/Theme.FraudGuardMonitor" />

@@ -8,15 +8,19 @@
 
 ## 0. 現在の構成
 
+**実際のドメイン・IP・Cognitoの識別子は `docs/environment.local.md`(gitignore済み)に置いている。**
+このドキュメントでは `<APIドメイン>` のようなプレースホルダで書く。秘密情報ではないが、
+公開リポジトリに具体的な稼働環境の識別子を残す必要はない。
+
 | 項目 | 値 |
 |---|---|
 | APIサーバー | `https://<APIドメイン>` |
 | 家族向けWeb | `https://<家族Webドメイン>` |
 | Lightsail | `fraudguard-server` / ap-northeast-1a / Ubuntu 24.04 / `small_3_0`(2GB, 月$12) |
-| 静的IP | `<静的IP>` |
-| DNS | Route 53(`<ドメイン>` のホストゾーン) |
+| 静的IP | Lightsailの静的IPをアタッチ |
+| DNS | Route 53 |
 | コンテナ | `app`(Ktor) / `db`(PostgreSQL 16) / `web`(Next.js) / `caddy` |
-| Cognito | User Pool `<UserPoolId>` / クライアント `<ClientId>` |
+| Cognito | User Pool + アプリクライアント(シークレット生成あり) |
 | バックアップ | Lightsail自動スナップショット(日次 19:00 UTC)+ `pg_dump`(日次 18:30 UTC, 7世代) |
 
 **実機で検証済み:** ペアリング、着信/発信の検知、通話時間の警告、SMS監視、アプリインストール検知、アプリ初回起動検知、LINE通話の検知・通話時間・遠隔切断、通常電話の遠隔切断(Family WebおよびSlack経由)、Slack通知、ハートビート、サーバー再起動からの自動復帰(36秒)、端末再起動からの復帰。

@@ -9,6 +9,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.fraudguard.monitor.ui.dashboard.DashboardScreen
+import com.fraudguard.monitor.ui.home.HomeScreen
 import com.fraudguard.monitor.ui.onboarding.PairingScreen
 import com.fraudguard.monitor.ui.onboarding.PermissionRequestScreen
 import com.fraudguard.monitor.ui.theme.FraudGuardMonitorTheme
@@ -16,7 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private enum class OnboardingStep { PAIRING, PERMISSIONS, DASHBOARD }
+private enum class OnboardingStep { PAIRING, PERMISSIONS, HOME }
 
 /**
  * requirements.md 34章[v2]: 未ペアリングならペアリング画面 → 権限リクエスト画面(34.5章)→
@@ -30,16 +31,23 @@ class MainActivity : ComponentActivity() {
         setContent {
             FraudGuardMonitorTheme {
                 var step by remember {
-                    mutableStateOf(if (pairingRepository.isPaired()) OnboardingStep.DASHBOARD else OnboardingStep.PAIRING)
+                    mutableStateOf(if (pairingRepository.isPaired()) OnboardingStep.HOME else OnboardingStep.PAIRING)
                 }
+                // requirements.md 4.3章[v2]: この端末ではこのアプリが電話アプリそのものなので、
+                // ホームは電話画面にする。監視状態は必要なときに開ければよい。
+                var showMonitoringStatus by remember { mutableStateOf(false) }
 
                 when (step) {
                     OnboardingStep.PAIRING ->
                         PairingScreen(pairingRepository = pairingRepository, onPaired = { step = OnboardingStep.PERMISSIONS })
                     OnboardingStep.PERMISSIONS ->
-                        PermissionRequestScreen(onDone = { step = OnboardingStep.DASHBOARD })
-                    OnboardingStep.DASHBOARD ->
-                        DashboardScreen()
+                        PermissionRequestScreen(onDone = { step = OnboardingStep.HOME })
+                    OnboardingStep.HOME ->
+                        if (showMonitoringStatus) {
+                            DashboardScreen(onBack = { showMonitoringStatus = false })
+                        } else {
+                            HomeScreen(onOpenMonitoringStatus = { showMonitoringStatus = true })
+                        }
                 }
             }
         }

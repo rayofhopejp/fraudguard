@@ -37,14 +37,14 @@ import com.fraudguard.monitor.call.formatCallTimestamp
 @Composable
 fun PhoneScreen(
     initialNumber: String,
+    initialTab: Int = PhoneTab.CONTACTS,
     history: List<CallHistoryEntry>,
     contacts: List<ContactEntry>,
     hasCallLogPermission: Boolean,
     hasContactsPermission: Boolean,
     onCall: (String) -> Unit,
 ) {
-    // 番号付きで起動された場合(ACTION_DIAL)はキーパッドから始める。
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by remember { mutableIntStateOf(initialTab) }
 
     Scaffold { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
@@ -59,15 +59,26 @@ fun PhoneScreen(
             }
 
             when (selectedTab) {
-                0 -> DialerScreen(initialNumber = initialNumber, onCall = onCall)
-                1 -> CallHistoryList(history, hasCallLogPermission, onCall)
-                else -> ContactList(contacts, hasContactsPermission, onCall)
+                PhoneTab.CONTACTS -> ContactList(contacts, hasContactsPermission, onCall)
+                PhoneTab.HISTORY -> CallHistoryList(history, hasCallLogPermission, onCall)
+                else -> DialerScreen(initialNumber = initialNumber, onCall = onCall)
             }
         }
     }
 }
 
-private val TABS = listOf("キーパッド", "履歴", "連絡先")
+/**
+ * 並びは「連絡先 → 履歴 → キーパッド」。この端末の利用者が最もよく使うのは
+ * 家族など決まった相手への発信で、番号を打つ機会はいちばん少ないため、
+ * よく使うものを先頭に置く。既定でも連絡先を開く。
+ */
+object PhoneTab {
+    const val CONTACTS = 0
+    const val HISTORY = 1
+    const val KEYPAD = 2
+}
+
+private val TABS = listOf("連絡先", "履歴", "キーパッド")
 
 @Composable
 private fun CallHistoryList(
