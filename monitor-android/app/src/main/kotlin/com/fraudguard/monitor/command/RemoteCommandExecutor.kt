@@ -1,6 +1,5 @@
 package com.fraudguard.monitor.command
 
-import com.fraudguard.monitor.call.FraudGuardInCallService
 import com.fraudguard.monitor.data.local.dao.UsedCommandDao
 import com.fraudguard.monitor.data.local.entity.UsedCommandEntity
 import com.fraudguard.monitor.data.remote.RemoteCommandDto
@@ -11,22 +10,21 @@ import java.time.format.DateTimeParseException
  * requirements.md 8.1章: 遠隔切断コマンドの安全性検証。以下を全て満たさない限り実行しない。
  *  - 署名がserverPublicKeyで検証できること
  *  - expiresAtを過ぎていないこと
- *  - callIdが現在ACTIVEな通話と一致すること
+ *  - callIdが現在進行中の通話のいずれかと一致すること
  *  - commandIdが未使用(二重実行防止, UsedCommandDao)であること
  *
- * @param disconnectAction 実際の通話切断アクション。既定は `FraudGuardInCallService.instance`
- *        (ROLE_DIALER取得後にのみ存在する)経由。マニフェストで当該サービスが未登録の間は常に
- *        存在せず、"incall_service_unavailable" として拒否される(requirements.md 4.3章[v2]の
- *        フェーズ分けと整合)。
+ * @param disconnectAction 実際の通話切断アクション。通常の電話は `FraudGuardInCallService`
+ *        (ROLE_DIALER取得後にのみ存在する)、LINE等のアプリ内通話は通知が持つ切断用PendingIntent
+ *        (requirements.md 10.3章)。どちらでも切れなかった場合は "call_unavailable" として拒否する。
  * @param clock テスト時に時刻を固定するためのフック。
  */
 class RemoteCommandExecutor(
     private val verifier: CommandSignatureVerifier,
     private val usedCommandDao: UsedCommandDao,
-    private val disconnectAction: (callId: String) -> Boolean = { callId -> FraudGuardInCallService.instance?.disconnect(callId) ?: false },
+    private val disconnectAction: (callId: String) -> Boolean,
     private val clock: () -> Instant = Instant::now,
 ) {
-    suspend fun execute(command: RemoteCommandDto, currentActiveCallId: String?): ExecutionResult {
+    suspend fun execute(command: RemoteCommandDto, activeCallIds: Set<String>): ExecutionResult {
         if (usedCommandDao.exists(command.commandId)) {
             return ExecutionResult.Rejected("duplicate_command")
         }
@@ -61,7 +59,7 @@ class RemoteCommandExecutor(
             return ExecutionResult.Rejected("expired")
         }
 
-        if (command.callId != currentActiveCallId) {
+        if (command.callId !in activeCallIds) {
             return ExecutionResult.Rejected("call_not_active_or_mismatched")
         }
 
@@ -72,7 +70,7 @@ class RemoteCommandExecutor(
         return if (disconnectAction(command.callId)) {
             ExecutionResult.Executed
         } else {
-            ExecutionResult.Rejected("incall_service_unavailable")
+            ExecutionResult.Rejected("call_unavailable")
         }
     }
 }

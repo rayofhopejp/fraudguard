@@ -27,7 +27,14 @@ object RiskEvaluationService {
 
     suspend fun ingestEvent(request: CreateEventRequest, deviceId: String) {
         val status = resolveWhitelistStatus(deviceId, request.metadata.phoneNumber)
-        val assessment = classifySingleEvent(request, status)
+        // requirements.md 10.3章: 家族が「家族の通話」とマークした通話は、以降その通話に関する
+        // イベント(通話時間の警告など)を通知しない。電話番号を持たないアプリ内通話に対する、
+        // ホワイトリストの代わりの抑制手段。
+        val assessment = if (isMarkedFamilyCall(deviceId, request.metadata.callId)) {
+            RiskEngine.markedFamilyCallAssessment()
+        } else {
+            classifySingleEvent(request, status)
+        }
         // requirements.md 17章: 家族には「なぜ警告なのか」(判定理由)が要る。サーバー側で
         // リスクレベルを判定し直した場合、その理由をmetadata.reasonへ載せる。
         // detailは端末側が入れた具体的な情報(アプリ名など)を残す方が有用なので上書きしない。
@@ -90,14 +97,31 @@ object RiskEvaluationService {
         FamilyNotifierProvider.get().notify(event, deviceName)
     }
 
+    private suspend fun isMarkedFamilyCall(deviceId: String, callId: String?): Boolean =
+        callId != null && MarkedCallRepository.isMarked(deviceId, callId)
+
     private fun classifySingleEvent(request: CreateEventRequest, status: WhitelistStatus): RiskAssessment? =
         when (request.type) {
+            // requirements.md 10.3章: sourceAppがあればLINE等のアプリ内通話。電話番号を持たないため
+            // 番号による判定はできず、RiskEngine側でアプリ内通話として別扱いになる。
             EventType.CALL_INCOMING ->
-                RiskEngine.evaluateCall(CallDirection.INCOMING, PhoneNumberClassifier.classify(request.metadata.phoneNumber), status)
+                RiskEngine.evaluateCall(
+                    CallDirection.INCOMING,
+                    PhoneNumberClassifier.classify(request.metadata.phoneNumber),
+                    status,
+                    request.metadata.sourceApp,
+                )
             EventType.CALL_OUTGOING ->
-                RiskEngine.evaluateCall(CallDirection.OUTGOING, PhoneNumberClassifier.classify(request.metadata.phoneNumber), status)
+                RiskEngine.evaluateCall(
+                    CallDirection.OUTGOING,
+                    PhoneNumberClassifier.classify(request.metadata.phoneNumber),
+                    status,
+                    request.metadata.sourceApp,
+                )
             EventType.CALL_LONG_DURATION ->
-                request.metadata.durationSeconds?.let { RiskEngine.evaluateCallDuration(it, status) }
+                request.metadata.durationSeconds?.let {
+                    RiskEngine.evaluateCallDuration(it, status, request.metadata.sourceApp)
+                }
             EventType.APP_REMOTE_CONTROL_INSTALLED ->
                 RiskEngine.evaluateAppInstall(AppRiskCategory.REMOTE_CONTROL)
             EventType.APP_MESSAGING_INSTALLED ->

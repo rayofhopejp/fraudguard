@@ -58,7 +58,12 @@ fun Application.module() {
     }
 
     val slackWebhookUrl = environment.config.propertyOrNull("slack.webhookUrl")?.getString().orEmpty()
-    FamilyNotifierProvider.init(slackWebhookUrl)
+    // requirements.md 10.3章: 通知に載せる「家族の通話としてマーク」リンクの生成に使う。
+    val publicBaseUrl = environment.config.propertyOrNull("publicBaseUrl")?.getString().orEmpty()
+    FamilyNotifierProvider.init(slackWebhookUrl, publicBaseUrl)
+    if (publicBaseUrl.isBlank()) {
+        log.warn("PUBLIC_BASE_URL not set; Slack notifications will not carry the 'mark as family call' link")
+    }
     if (slackWebhookUrl.isBlank()) {
         log.warn("SLACK_WEBHOOK_URL not set; family notifications will not be sent (requirements.md 2.2章)")
     }

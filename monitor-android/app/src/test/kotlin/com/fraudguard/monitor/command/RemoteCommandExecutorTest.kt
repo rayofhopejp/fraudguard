@@ -75,7 +75,7 @@ class RemoteCommandExecutorTest {
         val executor = RemoteCommandExecutor(CommandSignatureVerifier(publicKeyBase64), dao, disconnectAction = { true })
         val command = buildCommand()
 
-        val result = executor.execute(command, currentActiveCallId = command.callId)
+        val result = executor.execute(command, activeCallIds = setOf(command.callId))
 
         assertTrue(result is ExecutionResult.Executed)
         assertTrue(dao.exists(command.commandId))
@@ -89,7 +89,7 @@ class RemoteCommandExecutorTest {
         val wrongSignature = Base64.getEncoder().encodeToString(ByteArray(64))
         val command = buildCommand(signatureOverride = wrongSignature)
 
-        val result = executor.execute(command, currentActiveCallId = command.callId)
+        val result = executor.execute(command, activeCallIds = setOf(command.callId))
 
         assertEquals(ExecutionResult.Rejected("invalid_signature"), result)
     }
@@ -100,7 +100,7 @@ class RemoteCommandExecutorTest {
         val executor = RemoteCommandExecutor(CommandSignatureVerifier(publicKeyBase64), dao, disconnectAction = { true })
         val command = buildCommand(signatureOverride = "not-valid-base64!!")
 
-        val result = executor.execute(command, currentActiveCallId = command.callId)
+        val result = executor.execute(command, activeCallIds = setOf(command.callId))
 
         assertEquals(ExecutionResult.Rejected("invalid_signature"), result)
     }
@@ -114,7 +114,7 @@ class RemoteCommandExecutorTest {
             expiresAt = Instant.now().minusSeconds(60),
         )
 
-        val result = executor.execute(command, currentActiveCallId = command.callId)
+        val result = executor.execute(command, activeCallIds = setOf(command.callId))
 
         assertEquals(ExecutionResult.Rejected("expired"), result)
     }
@@ -125,7 +125,7 @@ class RemoteCommandExecutorTest {
         val executor = RemoteCommandExecutor(CommandSignatureVerifier(publicKeyBase64), dao, disconnectAction = { true })
         val command = buildCommand(callId = "call-1")
 
-        val result = executor.execute(command, currentActiveCallId = "call-2")
+        val result = executor.execute(command, activeCallIds = setOf("call-2"))
 
         assertEquals(ExecutionResult.Rejected("call_not_active_or_mismatched"), result)
     }
@@ -141,22 +141,43 @@ class RemoteCommandExecutorTest {
         )
         val command = buildCommand()
 
-        val first = executor.execute(command, currentActiveCallId = command.callId)
-        val second = executor.execute(command, currentActiveCallId = command.callId)
+        val first = executor.execute(command, activeCallIds = setOf(command.callId))
+        val second = executor.execute(command, activeCallIds = setOf(command.callId))
 
         assertTrue(first is ExecutionResult.Executed)
         assertEquals(ExecutionResult.Rejected("duplicate_command"), second)
         assertEquals(1, disconnectCallCount)
     }
 
+    /**
+     * requirements.md 10.3章: 通常の電話とLINE等のアプリ内通話が同時に進行しうるため、
+     * 「現在進行中の通話」は複数ありうる。そのいずれかと一致すれば実行できること。
+     */
     @Test
-    fun `unavailable InCallService is reported as a distinct rejection reason`() = runTest {
+    fun `a command matching any active call is executed`() = runTest {
+        val dao = FakeUsedCommandDao()
+        var disconnected: String? = null
+        val executor = RemoteCommandExecutor(
+            CommandSignatureVerifier(publicKeyBase64),
+            dao,
+            disconnectAction = { callId -> disconnected = callId; true },
+        )
+        val command = buildCommand()
+
+        val result = executor.execute(command, activeCallIds = setOf("other-call", command.callId))
+
+        assertEquals(ExecutionResult.Executed, result)
+        assertEquals(command.callId, disconnected)
+    }
+
+    @Test
+    fun `a call that cannot be disconnected is reported as a distinct rejection reason`() = runTest {
         val dao = FakeUsedCommandDao()
         val executor = RemoteCommandExecutor(CommandSignatureVerifier(publicKeyBase64), dao, disconnectAction = { false })
         val command = buildCommand()
 
-        val result = executor.execute(command, currentActiveCallId = command.callId)
+        val result = executor.execute(command, activeCallIds = setOf(command.callId))
 
-        assertEquals(ExecutionResult.Rejected("incall_service_unavailable"), result)
+        assertEquals(ExecutionResult.Rejected("call_unavailable"), result)
     }
 }

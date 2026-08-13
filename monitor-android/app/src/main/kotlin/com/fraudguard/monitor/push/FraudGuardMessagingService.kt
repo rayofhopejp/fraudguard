@@ -1,7 +1,6 @@
 package com.fraudguard.monitor.push
 
 import com.fraudguard.monitor.FraudGuardApplication
-import com.fraudguard.monitor.call.FraudGuardInCallService
 import com.fraudguard.monitor.command.CommandSignatureVerifier
 import com.fraudguard.monitor.command.ExecutionResult
 import com.fraudguard.monitor.command.RemoteCommandExecutor
@@ -36,10 +35,11 @@ class FraudGuardMessagingService : FirebaseMessagingService() {
             val executor = RemoteCommandExecutor(
                 verifier = CommandSignatureVerifier(serverPublicKey),
                 usedCommandDao = app.database.usedCommandDao(),
+                disconnectAction = { callId -> app.disconnectCall(callId) },
             )
-            // requirements.md 4.3章[v2]: ROLE_DIALER取得後はFraudGuardInCallServiceが「現在ACTIVEな通話」の
-            //       正となる(CallMonitorServiceはROLE_DIALER未取得時のみの軽量監視のため使わない)。
-            val result = executor.execute(command, FraudGuardInCallService.activeCallId())
+            // requirements.md 4.3章[v2], 10.3章: 通常の電話はTelecom(FraudGuardInCallService)が、
+            // LINE等のアプリ内通話は通知監視(AppCallRegistry)が「現在進行中の通話」を持つ。
+            val result = executor.execute(command, app.activeCallIds())
 
             // requirements.md 8.1章[v2]: FCM未達に備えたcommands/pendingへのポーリングも別途行う想定
             //       (sync/EventSyncWorker相当の定期ジョブは別途実装、8章TODO参照)。

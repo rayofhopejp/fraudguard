@@ -1,7 +1,9 @@
 package com.fraudguard.server.notify
 
 import com.fraudguard.server.domain.model.Event
+import com.fraudguard.server.domain.model.EventType
 import com.fraudguard.server.domain.model.RiskLevel
+import com.fraudguard.server.security.CallMarkToken
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.post
@@ -15,9 +17,19 @@ import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 
 /** requirements.md 2.2章: Slack Incoming Webhookへのリスクイベント通知。 */
-class SlackNotifier(private val webhookUrl: String) : FamilyNotifier {
+class SlackNotifier(
+    private val webhookUrl: String,
+    /** requirements.md 10.3章: 「家族の通話としてマーク」リンクの生成に使う。空ならリンクを載せない。 */
+    private val publicBaseUrl: String = "",
+) : FamilyNotifier {
     private companion object {
         const val MAX_SMS_BODY_CHARS = 500
+
+        val CALL_EVENT_TYPES = setOf(
+            EventType.CALL_INCOMING,
+            EventType.CALL_OUTGOING,
+            EventType.CALL_LONG_DURATION,
+        )
     }
 
     private val logger = LoggerFactory.getLogger(SlackNotifier::class.java)
@@ -63,6 +75,21 @@ class SlackNotifier(private val webhookUrl: String) : FamilyNotifier {
     private fun truncateForSlack(text: String): String =
         if (text.length <= MAX_SMS_BODY_CHARS) text else text.take(MAX_SMS_BODY_CHARS) + "…(以下略)"
 
+    /**
+     * requirements.md 10.3章: 「これは家族の通話」とマークするためのリンク。
+     *
+     * LINE等のアプリ内通話は相手を電話番号で識別できずホワイトリストが使えないため、
+     * 通知を受けた家族がその場で個別に止められる導線をここに用意する。
+     * 通話に紐づくイベントにのみ付ける(アプリインストール等には意味がない)。
+     */
+    private fun markAsFamilyCallLink(event: Event): String? {
+        if (publicBaseUrl.isBlank()) return null
+        if (event.type !in CALL_EVENT_TYPES) return null
+        val callId = event.metadata.callId ?: return null
+        val token = runCatching { CallMarkToken.issue(event.deviceId, callId) }.getOrNull() ?: return null
+        return "${publicBaseUrl.trimEnd('/')}/calls/mark?token=$token"
+    }
+
     private fun colorFor(level: RiskLevel): String = when (level) {
         RiskLevel.CRITICAL -> "#C62828"
         RiskLevel.WARNING -> "#F9A825"
@@ -82,6 +109,9 @@ class SlackNotifier(private val webhookUrl: String) : FamilyNotifier {
         // requirements.md 17章: 「判定理由」を家族に伝える。
         event.metadata.reason?.let { fields += SlackField("判定理由", it, short = false) }
         fields += SlackField("発生時刻", event.timestamp)
+        markAsFamilyCallLink(event)?.let {
+            fields += SlackField("家族の通話なら", "<$it|この通話の通知を止める>", short = false)
+        }
         return fields
     }
 }

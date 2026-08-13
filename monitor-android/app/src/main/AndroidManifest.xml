@@ -109,6 +109,14 @@
             android:exported="true"
             android:permission="android.permission.BIND_INCALL_SERVICE">
             <meta-data android:name="android.telecom.IN_CALL_SERVICE_UI" android:value="true" />
+            <!--
+                requirements.md 10.3章: LINE等のアプリ内通話も監視対象にするための宣言。
+                LINEは通話を自己管理型(SelfManaged)のPhoneAccountとして登録しており、
+                既定ではデフォルト電話アプリのInCallServiceへ通知されない(実機のdumpsys telecomで確認)。
+                自己管理型の通話はアプリ自身が通話UIを出すため、こちらのUIは絶対に出さないこと
+                (FraudGuardInCallService側でInCallActivityの起動を抑止している)。
+            -->
+            <meta-data android:name="android.telecom.INCLUDE_SELF_MANAGED_CALLS" android:value="true" />
             <intent-filter>
                 <action android:name="android.telecom.InCallService" />
             </intent-filter>

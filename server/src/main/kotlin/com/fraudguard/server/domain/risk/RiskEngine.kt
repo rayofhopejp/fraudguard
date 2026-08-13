@@ -46,12 +46,19 @@ object RiskEngine {
         "コンビニ", "電子マネー", "投資", "仮想通貨", "遠隔操作", "アプリを入れて",
     )
 
-    /** requirements.md 7.1〜7.3, 7.6章: 着信/発信の単一イベント判定。 */
+    /**
+     * requirements.md 7.1〜7.3, 7.6章: 着信/発信の単一イベント判定。
+     *
+     * `sourceApp` はLINE等のアプリ内通話(10.3章)の発生元パッケージ名。この場合は電話番号が存在せず、
+     * 相手を識別する手段が無いため、番号による判定(ホワイトリスト・国内/海外)は一切成立しない。
+     */
     fun evaluateCall(
         direction: CallDirection,
         classification: PhoneNumberClassifier.Classification,
         status: WhitelistStatus,
+        sourceApp: String? = null,
     ): RiskAssessment {
+        if (sourceApp != null) return appCallAssessment(sourceApp)
         if (status.isBlacklisted) {
             return RiskAssessment(RiskLevel.CRITICAL, "ブラックリスト登録済みの番号です")
         }
@@ -86,7 +93,9 @@ object RiskEngine {
     fun evaluateCallDuration(
         durationSeconds: Long,
         status: WhitelistStatus,
+        sourceApp: String? = null,
     ): RiskAssessment {
+        if (sourceApp != null) return appCallAssessment(sourceApp)
         if (status.isBlacklisted) return RiskAssessment(RiskLevel.CRITICAL, "ブラックリスト登録済みの番号との通話です")
         if (status.isWhitelisted) return RiskAssessment(RiskLevel.INFO, "ホワイトリスト登録済みの番号との通話です")
         if (durationSeconds < LONG_CALL_THRESHOLD_SECONDS) {
@@ -95,6 +104,33 @@ object RiskEngine {
 
         val minutes = durationSeconds / 60
         return RiskAssessment(RiskLevel.WARNING, "未登録の番号と${minutes}分以上通話しています")
+    }
+
+    /**
+     * requirements.md 10.3章: LINE等のアプリ内通話に対する判定。
+     *
+     * アプリ内通話は相手を電話番号で識別できないため、6章のホワイトリスト(番号単位)が使えず、
+     * 「未登録だから危険」とも「登録済みだから安全」とも言えない。
+     * それでも既定では通知する。詐欺の側がLINEへ誘導してくるのが実際の手口であり、
+     * 相手が分からないことを理由に黙るのは、最も知らせるべき通話を見逃すことになるため。
+     *
+     * 代わりに、家族が通知から「これは家族の通話」とマークすればその通話の以降の通知は止まる
+     * (RiskEvaluationServiceがMarkedCallRepositoryを見て判定を下げる)。
+     * 番号を持たない通話に対する、ホワイトリストの代わりの抑制手段という位置づけ。
+     */
+    private fun appCallAssessment(sourceApp: String): RiskAssessment =
+        RiskAssessment(RiskLevel.WARNING, "${appLabel(sourceApp)}のアプリ内通話です(相手は特定できません)")
+
+    /** requirements.md 10.3章: 家族が「家族の通話」とマークした通話。以降は通知しない。 */
+    fun markedFamilyCallAssessment(): RiskAssessment =
+        RiskAssessment(RiskLevel.INFO, "家族の通話としてマーク済みです")
+
+    private fun appLabel(packageName: String): String = when (packageName) {
+        "jp.naver.line.android" -> "LINE"
+        "org.telegram.messenger" -> "Telegram"
+        "org.thoughtcrime.securesms" -> "Signal"
+        "com.whatsapp" -> "WhatsApp"
+        else -> packageName
     }
 
     /**

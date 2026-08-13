@@ -20,7 +20,9 @@ class InCallActivity : ComponentActivity() {
         setContent {
             FraudGuardMonitorTheme {
                 val calls by FraudGuardInCallService.calls.collectAsState()
-                val primaryCall = calls.firstOrNull()
+                // requirements.md 10.3章: LINE等のアプリ内通話はアプリ側が通話UIを持つため、
+                // この画面には出さない(出すとLINEの通話画面を覆ってしまう)。
+                val primaryCall = calls.firstOrNull { !it.isSelfManaged }
 
                 // 通話が無くなったら(切断・終了)自動的に画面を閉じる。
                 LaunchedEffect(primaryCall) {

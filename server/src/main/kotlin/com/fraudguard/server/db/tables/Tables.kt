@@ -160,3 +160,17 @@ object PairingCodes : Table("pairing_codes") {
     val usedAt = timestamp("used_at").nullable()
     override val primaryKey = PrimaryKey(code)
 }
+
+/**
+ * requirements.md 10.3章: 家族が「これは家族の通話」とマークした通話。
+ * LINE等のアプリ内通話は相手を電話番号で識別できずホワイトリスト(6章)が使えないため、
+ * 通話単位で以降の通知を止める手段としてこれを使う。
+ */
+object FamilyMarkedCalls : Table("family_marked_calls") {
+    val id = varchar("id", 36)
+    val deviceId = varchar("device_id", 36).references(MonitoredDevices.id)
+    val callId = varchar("call_id", 36)
+    val markedAt = timestamp("marked_at")
+    val markedBy = varchar("marked_by", 36).references(FamilyUsers.id).nullable()
+    override val primaryKey = PrimaryKey(id)
+}

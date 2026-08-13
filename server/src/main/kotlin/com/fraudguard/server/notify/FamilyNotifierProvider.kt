@@ -5,8 +5,8 @@ object FamilyNotifierProvider {
     @Volatile
     private var instance: FamilyNotifier = NoopFamilyNotifier()
 
-    fun init(slackWebhookUrl: String) {
-        instance = if (slackWebhookUrl.isNotBlank()) SlackNotifier(slackWebhookUrl) else NoopFamilyNotifier()
+    fun init(slackWebhookUrl: String, publicBaseUrl: String = "") {
+        instance = if (slackWebhookUrl.isNotBlank()) SlackNotifier(slackWebhookUrl, publicBaseUrl) else NoopFamilyNotifier()
     }
 
     fun get(): FamilyNotifier = instance

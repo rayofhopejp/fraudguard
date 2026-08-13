@@ -5,11 +5,7 @@ import android.telecom.Call
 import android.telecom.InCallService
 import android.telecom.VideoProfile
 import com.fraudguard.monitor.FraudGuardApplication
-import com.fraudguard.monitor.command.CommandSignatureVerifier
-import com.fraudguard.monitor.command.ExecutionResult
-import com.fraudguard.monitor.command.RemoteCommandExecutor
-import com.fraudguard.monitor.data.remote.ApiClient
-import com.fraudguard.monitor.data.remote.CommandExecutionReportDto
+import com.fraudguard.monitor.command.CommandPoller
 import com.fraudguard.monitor.risk.EventMetadata
 import com.fraudguard.monitor.risk.EventType
 import com.fraudguard.monitor.risk.RiskLevel
@@ -47,25 +43,35 @@ class FraudGuardInCallService : InCallService() {
         /** requirements.md 8.1章: RemoteCommandExecutorが「対象通話が現在ACTIVEであること」を検証する際に使う。 */
         fun activeCallId(): String? = _calls.value.firstOrNull { it.state == Call.STATE_ACTIVE }?.callId
 
-        /**
-         * requirements.md 8.1章[v2]: FCM未達に備えたpendingコマンドのポーリング間隔。
-         * 通話中は「今まさに切りたい」場面なのでWorkManagerの最短15分では遅すぎるため、
-         * 通話が存在する間だけこの短い間隔でポーリングする(通話が無い間は動かないのでバッテリー影響も限定的)。
-         */
-        private const val COMMAND_POLL_INTERVAL_MS = 5_000L
+        /** packageName -> (callId, 記録時刻)。直近に報告したアプリ内通話。1アプリ1通話を想定。 */
+        private val selfManagedCallIds = mutableMapOf<String, Pair<String, Long>>()
 
         /**
-         * requirements.md 7.4章: ホワイトリスト外番号との通話が続いた場合に家族へ知らせる閾値。
-         * 3分で最初の警告を出し、以降5分・10分でも重ねて知らせる
-         * (説得が長引くほど危険度が上がるため、一度警告して終わりにしない)。
-         * 実際に警告とするかの判定はサーバー側RiskEngineが行う(ホワイトリスト判定を持つのはサーバー)。
+         * 通知が同じ通話のものとみなせる猶予。Telecomは数秒で通話を手放すため、
+         * 「Telecomから消えた後に届いた通知」も同じ通話として引き継げる必要がある。
+         * 一方、無期限に引き継ぐと次の通話が前回のcallIdを名乗ってしまうため上限を設ける。
          */
-        private val LONG_CALL_THRESHOLDS_SECONDS = listOf(180L, 300L, 600L)
+        private const val ADOPTION_WINDOW_MS = 60_000L
+
+        /**
+         * requirements.md 10.3章: 通知監視側が、同じ通話をTelecom経由で既に報告済みかを問い合わせる。
+         * 引き継げばイベントが2件にならず、家族から見て1つの通話として扱える。
+         */
+        @Synchronized
+        fun selfManagedCallId(packageName: String): String? {
+            val (callId, rememberedAt) = selfManagedCallIds[packageName] ?: return null
+            return callId.takeIf { System.currentTimeMillis() - rememberedAt <= ADOPTION_WINDOW_MS }
+        }
+
+        @Synchronized
+        private fun rememberSelfManagedCall(packageName: String, callId: String) {
+            selfManagedCallIds[packageName] = callId to System.currentTimeMillis()
+        }
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob())
     private val activeCalls = mutableMapOf<String, Call>()
-    private var pollJob: Job? = null
+    private var commandPoller: CommandPoller? = null
 
     /** callId -> 通話時間監視ジョブ。requirements.md 4.2章の「ACTIVEからの経過時間計測」。 */
     private val durationJobs = mutableMapOf<String, Job>()
@@ -73,7 +79,8 @@ class FraudGuardInCallService : InCallService() {
     private val callCallback = object : Call.Callback() {
         override fun onStateChanged(call: Call, state: Int) {
             publishState()
-            if (state == Call.STATE_ACTIVE) {
+            // アプリ内通話の通話時間は通知側が見る(requirements.md 10.3章)。
+            if (state == Call.STATE_ACTIVE && !isSelfManaged(call)) {
                 val callId = activeCalls.entries.firstOrNull { it.value == call }?.key
                 if (callId != null) startDurationTracking(callId, call)
             }
@@ -87,7 +94,7 @@ class FraudGuardInCallService : InCallService() {
 
     override fun onDestroy() {
         activeCalls.values.forEach { it.unregisterCallback(callCallback) }
-        pollJob?.cancel()
+        commandPoller?.stop()
         serviceScope.cancel()
         instance = null
         super.onDestroy()
@@ -102,6 +109,16 @@ class FraudGuardInCallService : InCallService() {
 
         reportCallEvent(callId, call)
         startCommandPollingIfNeeded()
+
+        // requirements.md 10.3章: LINE等のアプリ内通話は、Telecomが数秒で通話を手放してしまう。
+        // 通話時間の計測と遠隔切断は通話中ずっと残る通知側(AppCallRegistry)が引き継ぐため、
+        // ここでは「どのcallIdで報告したか」だけを渡してこの先の追跡は行わない。
+        // 自前の通話画面も出さない(LINE自身の通話画面を覆って通話の妨害になるため)。
+        if (isSelfManaged(call)) {
+            selfManagedSourceApp(call)?.let { rememberSelfManagedCall(it, callId) }
+            return
+        }
+
         // 発信は追加時点で既にACTIVE/DIALINGのことがあり、onStateChangedが来ない場合があるため
         // ここでも計測開始を試みる(startDurationTrackingは二重起動しない)。
         if (call.state == Call.STATE_ACTIVE) startDurationTracking(callId, call)
@@ -114,6 +131,18 @@ class FraudGuardInCallService : InCallService() {
         )
     }
 
+    /**
+     * requirements.md 10.3章: LINE等のアプリ内通話かどうか。
+     * これらはINCLUDE_SELF_MANAGED_CALLS宣言によって通知されるが、通話UIも操作もアプリ側の責務で、
+     * こちらは「通話が起きている」という観測に徹する。
+     */
+    private fun isSelfManaged(call: Call): Boolean =
+        call.details?.hasProperty(Call.Details.PROPERTY_SELF_MANAGED) == true
+
+    /** 自己管理型通話の発生元アプリ(LINE等)。通常の電話ではnull。 */
+    private fun selfManagedSourceApp(call: Call): String? =
+        if (isSelfManaged(call)) call.details?.accountHandle?.componentName?.packageName else null
+
     override fun onCallRemoved(call: Call) {
         super.onCallRemoved(call)
         call.unregisterCallback(callCallback)
@@ -125,8 +154,8 @@ class FraudGuardInCallService : InCallService() {
         removedIds.forEach { durationJobs.remove(it)?.cancel() }
 
         if (activeCalls.isEmpty()) {
-            pollJob?.cancel()
-            pollJob = null
+            commandPoller?.stop()
+            commandPoller = null
         }
 
         // requirements.md 14.1章: 「通話中に指示されてアプリを入れさせられる」のが典型的な手口のため、
@@ -147,22 +176,31 @@ class FraudGuardInCallService : InCallService() {
     private fun reportCallEvent(callId: String, call: Call) {
         val app = applicationContext as? FraudGuardApplication ?: return
         val isIncoming = call.state == Call.STATE_RINGING
-        val phoneNumber = call.details?.handle?.schemeSpecificPart
+        val sourceApp = selfManagedSourceApp(call)
 
         serviceScope.launch {
             app.eventReporter.report(
                 type = if (isIncoming) EventType.CALL_INCOMING else EventType.CALL_OUTGOING,
                 riskLevel = RiskLevel.NOTICE,
                 title = if (isIncoming) "着信" else "発信",
-                detail = "通話を検知しました。",
+                detail = if (sourceApp != null) "アプリ内通話を検知しました。" else "通話を検知しました。",
                 metadata = EventMetadata(
-                    phoneNumber = phoneNumber,
+                    phoneNumber = phoneNumberOf(call),
                     callId = callId,
                     direction = if (isIncoming) "INCOMING" else "OUTGOING",
+                    sourceApp = sourceApp,
                 ),
             )
         }
     }
+
+    /**
+     * requirements.md 10.3章, 25章: 自己管理型通話のhandleは電話番号ではなくアプリ内の識別子のため、
+     * phoneNumberとしては送らない。番号として扱うとサーバーのホワイトリスト照合が無意味になるうえ、
+     * 電話番号ではない個人識別子を番号欄に残すことになる。
+     */
+    private fun phoneNumberOf(call: Call): String? =
+        if (isSelfManaged(call)) null else call.details?.handle?.schemeSpecificPart
 
     /**
      * requirements.md 4.2章, 7.4章: 通話の経過時間を計測し、
@@ -180,7 +218,8 @@ class FraudGuardInCallService : InCallService() {
     private fun startDurationTracking(callId: String, call: Call) {
         if (durationJobs[callId]?.isActive == true) return
         val app = applicationContext as? FraudGuardApplication ?: return
-        val phoneNumber = call.details?.handle?.schemeSpecificPart
+        val phoneNumber = phoneNumberOf(call)
+        val sourceApp = selfManagedSourceApp(call)
         val connectTimeMillis = call.details?.connectTimeMillis?.takeIf { it > 0 } ?: System.currentTimeMillis()
 
         durationJobs[callId] = serviceScope.launch {
@@ -203,6 +242,7 @@ class FraudGuardInCallService : InCallService() {
                         phoneNumber = phoneNumber,
                         callId = callId,
                         durationSeconds = threshold,
+                        sourceApp = sourceApp,
                     ),
                 )
             }
@@ -211,52 +251,17 @@ class FraudGuardInCallService : InCallService() {
 
     /** requirements.md 8.1章[v2]: 通話中のみpendingコマンドをポーリングし、遠隔切断を実行する。 */
     private fun startCommandPollingIfNeeded() {
-        if (pollJob?.isActive == true) return
-
         val app = applicationContext as? FraudGuardApplication ?: return
-        val pairingRepository = app.pairingRepository
+        val poller = commandPoller
+            ?: CommandPoller(app, activeCallIds = { app.activeCallIds() }).also { commandPoller = it }
 
-        pollJob = serviceScope.launch {
-            while (isActive) {
-                val deviceId = pairingRepository.getDeviceId()
-                val apiKey = pairingRepository.getApiKey()
-                val serverPublicKey = pairingRepository.getServerPublicKey()
-
-                // requirements.md 13章, 14.1章: 詐欺犯に指示されてアプリを入れさせられ、その場で
-                // 起動させられるのが典型的な手口。通話中はインストールと起動の両方を毎回確認する。
-                // インストールを先に検知しないと起動監視の対象に登録されないため、順序も重要
-                // (起動チェックだけ回していて通話中のインストールを取りこぼす不具合を実機テストで発見)。
-                runCatching { app.appInstallScanner.scan() }
-                runCatching { app.appLaunchDetector.checkLaunches() }
-
-                if (deviceId != null && apiKey != null && serverPublicKey != null) {
-                    runCatching {
-                        val api = ApiClient.create { apiKey }
-                        val pending = api.getPendingCommands(deviceId).body().orEmpty()
-                        if (pending.isNotEmpty()) {
-                            val executor = RemoteCommandExecutor(
-                                verifier = CommandSignatureVerifier(serverPublicKey),
-                                usedCommandDao = app.database.usedCommandDao(),
-                            )
-                            for (command in pending) {
-                                val result = executor.execute(command, activeCallId())
-                                api.reportCommandResult(
-                                    deviceId,
-                                    command.commandId,
-                                    CommandExecutionReportDto(
-                                        commandId = command.commandId,
-                                        deviceId = deviceId,
-                                        success = result is ExecutionResult.Executed,
-                                        failureReason = (result as? ExecutionResult.Rejected)?.reason,
-                                        executedAt = Instant.now().toString(),
-                                    ),
-                                )
-                            }
-                        }
-                    }
-                }
-                delay(COMMAND_POLL_INTERVAL_MS)
-            }
+        poller.startIfNeeded(serviceScope) {
+            // requirements.md 13章, 14.1章: 詐欺犯に指示されてアプリを入れさせられ、その場で
+            // 起動させられるのが典型的な手口。通話中はインストールと起動の両方を毎回確認する。
+            // インストールを先に検知しないと起動監視の対象に登録されないため、順序も重要
+            // (起動チェックだけ回していて通話中のインストールを取りこぼす不具合を実機テストで発見)。
+            runCatching { app.appInstallScanner.scan() }
+            runCatching { app.appLaunchDetector.checkLaunches() }
         }
     }
 
@@ -264,8 +269,9 @@ class FraudGuardInCallService : InCallService() {
         _calls.value = activeCalls.map { (callId, call) ->
             TrackedCall(
                 callId = callId,
-                phoneNumber = call.details?.handle?.schemeSpecificPart,
+                phoneNumber = phoneNumberOf(call),
                 state = call.state,
+                isSelfManaged = isSelfManaged(call),
             )
         }
     }
@@ -295,4 +301,6 @@ data class TrackedCall(
     val callId: String,
     val phoneNumber: String?,
     val state: Int,
+    /** requirements.md 10.3章: LINE等のアプリ内通話。監視はするが自前UIには出さない。 */
+    val isSelfManaged: Boolean = false,
 )

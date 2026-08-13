@@ -1,5 +1,6 @@
 package com.fraudguard.server.plugins
 
+import com.fraudguard.server.routes.callMarkRoutes
 import com.fraudguard.server.routes.deviceCommandRoutes
 import com.fraudguard.server.routes.deviceEventRoutes
 import com.fraudguard.server.routes.deviceFcmTokenRoute
@@ -26,6 +27,10 @@ fun Application.configureRouting() {
 
         // ペアリングコード交換は一時コード自体が認証情報のため未認証エンドポイント。
         pairingExchangeRoute()
+
+        // requirements.md 10.3章: Slackの通知から通話をマークする導線。
+        // 署名付きトークン自体が認証情報のため未認証エンドポイント。
+        callMarkRoutes()
 
         // Monitorアプリからのアクセス(端末APIキー認証)。
         authenticate("device-auth") {

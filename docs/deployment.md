@@ -126,10 +126,13 @@ docker run -d --name fraudguard-server --network fraudguard-net \
   -e COGNITO_ISSUER='https://cognito-idp.ap-northeast-1.amazonaws.com/<UserPoolId>' \
   -e COGNITO_AUDIENCE='<アプリクライアントID>' \
   -e SLACK_WEBHOOK_URL='<A4で発行したWebhook URL>' \
+  -e PUBLIC_BASE_URL='https://<A7で設定するドメイン>' \
   -v /etc/fraudguard:/etc/fraudguard:ro \
   --restart unless-stopped \
   fraudguard-server
 ```
+
+`PUBLIC_BASE_URL`は、Slack通知に載せる「家族の通話としてマーク」リンク(要件定義10.3章)の生成に使う、外部から到達できるこのサーバーのURL。A7で設定するドメインと一致させること。未設定でも通知は送られるが、リンクは載らない。
 
 `FCM_SERVICE_ACCOUNT_PATH`のデフォルト値(`/etc/fraudguard/fcm-service-account.json`)は`-v /etc/fraudguard:/etc/fraudguard:ro`で既にマウント済みのパスと一致するため、A4aでそのファイル名のまま配置していれば追加の`-e`は不要。
 

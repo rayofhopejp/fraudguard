@@ -20,10 +20,10 @@ import kotlinx.serialization.json.Json
 class EventReporter(
     private val eventDao: EventDao,
     private val pairingRepository: PairingRepository,
-) {
+) : EventSink {
     private val json = Json { encodeDefaults = true }
 
-    suspend fun report(
+    override suspend fun report(
         type: EventType,
         riskLevel: RiskLevel,
         title: String,

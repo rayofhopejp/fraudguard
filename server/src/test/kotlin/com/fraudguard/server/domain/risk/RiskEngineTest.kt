@@ -7,6 +7,7 @@ import com.fraudguard.server.domain.model.RiskLevel
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -114,6 +115,53 @@ class RiskEngineTest {
         assertEquals(RiskLevel.INFO, RiskEngine.evaluateAppInstall(AppRiskCategory.NORMAL).level)
         assertEquals(RiskLevel.WARNING, RiskEngine.evaluateAppInstall(AppRiskCategory.MESSAGING).level)
         assertEquals(RiskLevel.CRITICAL, RiskEngine.evaluateAppInstall(AppRiskCategory.REMOTE_CONTROL).level)
+    }
+
+    // --- 10.3章: LINE等のアプリ内通話 ---
+
+    @Test
+    fun `app internal call is notified and not mistaken for an invalid phone number`() {
+        val notWhitelisted = WhitelistStatus(isWhitelisted = false, isBlacklisted = false)
+        // 電話番号が無いため Invalid になるが、7.6章の「番号の形式が不正」には当たらない。
+        val assessment = RiskEngine.evaluateCall(
+            direction = CallDirection.INCOMING,
+            classification = PhoneNumberClassifier.classify(null),
+            status = notWhitelisted,
+            sourceApp = "jp.naver.line.android",
+        )
+        assertEquals(RiskLevel.WARNING, assessment.level)
+        assertTrue(assessment.reason.contains("LINE"))
+        assertFalse(assessment.reason.contains("不正"))
+    }
+
+    @Test
+    fun `long app internal call is notified`() {
+        val assessment = RiskEngine.evaluateCallDuration(
+            durationSeconds = 600,
+            status = WhitelistStatus(isWhitelisted = false, isBlacklisted = false),
+            sourceApp = "jp.naver.line.android",
+        )
+        assertEquals(RiskLevel.WARNING, assessment.level)
+    }
+
+    /** マーク後はINFOになり、通知閾値(WARNING以上)を下回ること。 */
+    @Test
+    fun `marked family call falls below the notification threshold`() {
+        val assessment = RiskEngine.markedFamilyCallAssessment()
+        assertEquals(RiskLevel.INFO, assessment.level)
+        assertTrue(assessment.level.ordinal < RiskLevel.WARNING.ordinal)
+    }
+
+    /** マークで通知を止めても、他の兆候と重なれば14章で上がること(NOTICE相当でも相関対象)。 */
+    @Test
+    fun `app internal call still correlates with a remote control app install`() {
+        val now = Instant.now()
+        val events = listOf(
+            event(EventType.CALL_INCOMING, RiskLevel.NOTICE, now.minusSeconds(600)),
+            event(EventType.APP_REMOTE_CONTROL_INSTALLED, RiskLevel.CRITICAL, now.minusSeconds(300), packageName = "com.anydesk.anydeskandroid"),
+        )
+        val findings = RiskEngine.evaluateCorrelation(events, now)
+        assertTrue(findings.any { it.type == EventType.CORRELATED_RISK && it.riskLevel == RiskLevel.CRITICAL })
     }
 
     // --- 14.1章: 遠隔操作詐欺 ---
