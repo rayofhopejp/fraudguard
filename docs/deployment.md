@@ -291,16 +291,29 @@ Family WebとAPIはドメインが別なので、`EventActions` のようなク�
 
 あわせて **`XForwardedHeaders` が必須**。Caddyの背後ではKtorは自分のオリジンを `http://` と認識するため、ブラウザが送る `Origin: https://...` と食い違い、**同一オリジンのフォーム送信すら403になる**(Slackの「家族の通話としてマーク」の確認画面がこれで弾かれた)。アプリのポートを外部に公開していないので、このヘッダは信頼できる。
 
+**使うHTTPメソッドは明示すること。** GETとPOSTはCORSの安全なメソッドとして既定で通るため、
+それだけを試すと設定漏れに気づけない。DELETEを許可し忘れて、共有の解除とホワイトリストの削除が
+ブラウザ内で `Failed to fetch` になっていた(サーバーには何も届かないのでログにも出ない)。
+
 確認:
 
 ```bash
-# 許可オリジンからのプリフライトは200
-curl -si -X OPTIONS https://<APIドメイン>/devices/<id>/commands \
-  -H "Origin: https://<家族Webドメイン>" -H "Access-Control-Request-Method: POST" | head -5
+# 許可オリジンからのプリフライトは200(使うメソッドごとに確認する)
+for m in POST DELETE; do
+  curl -so /dev/null -w "$m=%{http_code}\n" -X OPTIONS https://<APIドメイン>/devices/<id>/commands \
+    -H "Origin: https://<家族Webドメイン>" -H "Access-Control-Request-Method: $m"
+done
 # 無関係なオリジンは403
 curl -so /dev/null -w "%{http_code}\n" -X OPTIONS https://<APIドメイン>/devices/<id>/commands \
   -H "Origin: https://evil.example.com" -H "Access-Control-Request-Method: POST"
 ```
+
+### APIが返す型には `@Serializable` を付ける
+
+付け忘れてもコンパイルは通り、そのエンドポイントを実際に呼ぶまで表面化しない。しかも
+kotlinx.serializationの例外は `IllegalArgumentException` を継承しているため、`StatusPages` が
+**400 Bad Request** に変換し、原因が分かりにくい形で失敗する。`ApiSerializationTest` が
+返却型ごとに実際のJSON変換を確認しているので、型を増やしたらそこにも追加すること。
 
 ### 端末の所有者
 
