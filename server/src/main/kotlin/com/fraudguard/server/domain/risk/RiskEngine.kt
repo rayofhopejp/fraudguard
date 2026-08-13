@@ -75,14 +75,23 @@ object RiskEngine {
         }
     }
 
-    /** requirements.md 7.4章: ホワイトリスト外番号との長時間通話。180秒未満または対象外ならnull。 */
+    /**
+     * requirements.md 7.4章: ホワイトリスト外番号との長時間通話。
+     *
+     * 「警告に当たらない」場合もINFOとして明示的に返す(nullを返さない)。nullだと
+     * RiskEvaluationService側で「サーバーは判断しない=端末の申告値を採用」という意味になり、
+     * ホワイトリスト登録済みの番号との長電話でも端末が付けたWARNINGのまま家族へ通知されてしまう
+     * (6章でホワイトリストは信頼済みと定めているため、これは誤警報になる)。
+     */
     fun evaluateCallDuration(
         durationSeconds: Long,
         status: WhitelistStatus,
-    ): RiskAssessment? {
-        if (status.isWhitelisted) return null
+    ): RiskAssessment {
         if (status.isBlacklisted) return RiskAssessment(RiskLevel.CRITICAL, "ブラックリスト登録済みの番号との通話です")
-        if (durationSeconds < LONG_CALL_THRESHOLD_SECONDS) return null
+        if (status.isWhitelisted) return RiskAssessment(RiskLevel.INFO, "ホワイトリスト登録済みの番号との通話です")
+        if (durationSeconds < LONG_CALL_THRESHOLD_SECONDS) {
+            return RiskAssessment(RiskLevel.NOTICE, "通話中です")
+        }
 
         val minutes = durationSeconds / 60
         return RiskAssessment(RiskLevel.WARNING, "未登録の番号と${minutes}分以上通話しています")

@@ -65,19 +65,26 @@ class RiskEngineTest {
     // --- 7.4 ---
 
     @Test
-    fun `long call under 180 seconds with unlisted number produces no warning`() {
-        assertNull(RiskEngine.evaluateCallDuration(179, notListed))
+    fun `call under 180 seconds with unlisted number does not reach warning level`() {
+        assertEquals(RiskLevel.NOTICE, RiskEngine.evaluateCallDuration(179, notListed).level)
     }
 
     @Test
     fun `long call at or over 180 seconds with unlisted number is WARNING`() {
         val result = RiskEngine.evaluateCallDuration(180, notListed)
-        assertEquals(RiskLevel.WARNING, result?.level)
+        assertEquals(RiskLevel.WARNING, result.level)
+        assertTrue(result.reason.contains("3分"), "何分通話しているかが判定理由に含まれること")
     }
 
     @Test
-    fun `long call with whitelisted number never warns`() {
-        assertNull(RiskEngine.evaluateCallDuration(600, whitelisted))
+    fun `long call with whitelisted number is downgraded to INFO so the family is not alerted`() {
+        // nullを返すと端末が申告したWARNINGがそのまま採用されてしまうため、明示的にINFOへ下げる。
+        assertEquals(RiskLevel.INFO, RiskEngine.evaluateCallDuration(600, whitelisted).level)
+    }
+
+    @Test
+    fun `long call with blacklisted number is CRITICAL`() {
+        assertEquals(RiskLevel.CRITICAL, RiskEngine.evaluateCallDuration(600, blacklisted).level)
     }
 
     // --- 9.1章: SMSの危険語判定 ---

@@ -53,15 +53,30 @@ class FraudGuardInCallService : InCallService() {
          * 通話が存在する間だけこの短い間隔でポーリングする(通話が無い間は動かないのでバッテリー影響も限定的)。
          */
         private const val COMMAND_POLL_INTERVAL_MS = 5_000L
+
+        /**
+         * requirements.md 7.4章: ホワイトリスト外番号との通話が続いた場合に家族へ知らせる閾値。
+         * 3分で最初の警告を出し、以降5分・10分でも重ねて知らせる
+         * (説得が長引くほど危険度が上がるため、一度警告して終わりにしない)。
+         * 実際に警告とするかの判定はサーバー側RiskEngineが行う(ホワイトリスト判定を持つのはサーバー)。
+         */
+        private val LONG_CALL_THRESHOLDS_SECONDS = listOf(180L, 300L, 600L)
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob())
     private val activeCalls = mutableMapOf<String, Call>()
     private var pollJob: Job? = null
 
+    /** callId -> 通話時間監視ジョブ。requirements.md 4.2章の「ACTIVEからの経過時間計測」。 */
+    private val durationJobs = mutableMapOf<String, Job>()
+
     private val callCallback = object : Call.Callback() {
         override fun onStateChanged(call: Call, state: Int) {
             publishState()
+            if (state == Call.STATE_ACTIVE) {
+                val callId = activeCalls.entries.firstOrNull { it.value == call }?.key
+                if (callId != null) startDurationTracking(callId, call)
+            }
         }
     }
 
@@ -87,6 +102,9 @@ class FraudGuardInCallService : InCallService() {
 
         reportCallEvent(callId, call)
         startCommandPollingIfNeeded()
+        // 発信は追加時点で既にACTIVE/DIALINGのことがあり、onStateChangedが来ない場合があるため
+        // ここでも計測開始を試みる(startDurationTrackingは二重起動しない)。
+        if (call.state == Call.STATE_ACTIVE) startDurationTracking(callId, call)
 
         // requirements.md 4.3章[v2]: システム標準の着信/通話中UIが出ないため、自前の画面を起動する。
         startActivity(
@@ -99,8 +117,12 @@ class FraudGuardInCallService : InCallService() {
     override fun onCallRemoved(call: Call) {
         super.onCallRemoved(call)
         call.unregisterCallback(callCallback)
+        val removedIds = activeCalls.filterValues { it == call }.keys.toList()
         activeCalls.entries.removeAll { it.value == call }
         publishState()
+
+        // 通話が終わったら経過時間の監視も止める(残しておくと切れた通話で警告が飛ぶ)。
+        removedIds.forEach { durationJobs.remove(it)?.cancel() }
 
         if (activeCalls.isEmpty()) {
             pollJob?.cancel()
@@ -135,6 +157,42 @@ class FraudGuardInCallService : InCallService() {
                     direction = if (isIncoming) "INCOMING" else "OUTGOING",
                 ),
             )
+        }
+    }
+
+    /**
+     * requirements.md 4.2章, 7.4章: 通話がACTIVEになった時点からの経過時間を計測し、
+     * 閾値(3分・5分・10分)に達するたびにCALL_LONG_DURATIONイベントを送る。
+     *
+     * 通話終了後にまとめて送るのではなく通話中に送るのが要点で、家族が「今まさに長引いている通話」を
+     * 知って遠隔切断(8章)を判断できるようにするための情報。
+     */
+    private fun startDurationTracking(callId: String, call: Call) {
+        if (durationJobs[callId]?.isActive == true) return
+        val app = applicationContext as? FraudGuardApplication ?: return
+        val phoneNumber = call.details?.handle?.schemeSpecificPart
+
+        durationJobs[callId] = serviceScope.launch {
+            var elapsed = 0L
+            for (threshold in LONG_CALL_THRESHOLDS_SECONDS) {
+                delay((threshold - elapsed) * 1000)
+                elapsed = threshold
+                // 通話が既に終わっていたら報告しない(ジョブのキャンセルと競合した場合の保険)。
+                if (!activeCalls.containsKey(callId)) return@launch
+
+                val minutes = threshold / 60
+                app.eventReporter.report(
+                    type = EventType.CALL_LONG_DURATION,
+                    riskLevel = RiskLevel.NOTICE, // 最終的なリスク判定はサーバー側RiskEngineが行う
+                    title = "通話が${minutes}分を超えました",
+                    detail = "通話が継続しています。",
+                    metadata = EventMetadata(
+                        phoneNumber = phoneNumber,
+                        callId = callId,
+                        durationSeconds = threshold,
+                    ),
+                )
+            }
         }
     }
 

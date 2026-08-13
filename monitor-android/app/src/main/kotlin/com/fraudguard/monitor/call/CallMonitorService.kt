@@ -1,6 +1,9 @@
 package com.fraudguard.monitor.call
 
 import android.annotation.SuppressLint
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import android.os.Build
@@ -8,6 +11,7 @@ import android.os.IBinder
 import android.telephony.PhoneStateListener
 import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
+import androidx.core.app.NotificationCompat
 import androidx.core.content.getSystemService
 import java.util.UUID
 
@@ -23,6 +27,9 @@ import java.util.UUID
 class CallMonitorService : Service() {
 
     companion object {
+        private const val CHANNEL_ID = "fraudguard_monitoring"
+        private const val NOTIFICATION_ID = 1
+
         /** requirements.md 8.1章: 「対象通話が現在ACTIVEであること」の検証にRemoteCommandExecutorが使う。 */
         @Volatile
         var activeCallId: String? = null
@@ -36,6 +43,11 @@ class CallMonitorService : Service() {
 
     @SuppressLint("MissingPermission")
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // startForegroundService()で起動された場合、ここで即座にstartForeground()を呼ばないと
+        // ForegroundServiceDidNotStartInTimeExceptionでアプリごとクラッシュする(実機で発生)。
+        // 常駐通知はrequirements.md 26章の透明性(監視されていることが本人に分かる)にも資する。
+        startForeground(NOTIFICATION_ID, buildMonitoringNotification())
+
         val telephonyManager = getSystemService<TelephonyManager>() ?: return START_STICKY
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -45,6 +57,23 @@ class CallMonitorService : Service() {
             telephonyManager.listen(legacyListener, PhoneStateListener.LISTEN_CALL_STATE)
         }
         return START_STICKY
+    }
+
+    private fun buildMonitoringNotification(): Notification {
+        val manager = getSystemService<NotificationManager>()
+        if (manager?.getNotificationChannel(CHANNEL_ID) == null) {
+            manager?.createNotificationChannel(
+                NotificationChannel(CHANNEL_ID, "監視状態", NotificationManager.IMPORTANCE_LOW).apply {
+                    description = "FraudGuardが通話を監視していることを示す常駐通知です。"
+                },
+            )
+        }
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("FraudGuard 監視中")
+            .setContentText("不審な電話やSMSを監視しています。")
+            .setSmallIcon(android.R.drawable.ic_menu_call)
+            .setOngoing(true)
+            .build()
     }
 
     private val callback31 = object : TelephonyCallback(), TelephonyCallback.CallStateListener {
