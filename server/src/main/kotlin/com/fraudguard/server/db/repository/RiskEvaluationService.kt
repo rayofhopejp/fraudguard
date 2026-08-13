@@ -110,6 +110,7 @@ object RiskEvaluationService {
                     PhoneNumberClassifier.classify(request.metadata.phoneNumber),
                     status,
                     request.metadata.sourceApp,
+                    hasPhoneNumber = request.metadata.phoneNumber != null,
                 )
             EventType.CALL_OUTGOING ->
                 RiskEngine.evaluateCall(
@@ -117,6 +118,7 @@ object RiskEvaluationService {
                     PhoneNumberClassifier.classify(request.metadata.phoneNumber),
                     status,
                     request.metadata.sourceApp,
+                    hasPhoneNumber = request.metadata.phoneNumber != null,
                 )
             EventType.CALL_LONG_DURATION ->
                 request.metadata.durationSeconds?.let {

@@ -23,7 +23,7 @@
 | Cognito | User Pool + アプリクライアント(シークレット生成あり) |
 | バックアップ | Lightsail自動スナップショット(日次 19:00 UTC)+ `pg_dump`(日次 18:30 UTC, 7世代) |
 
-**実機で検証済み:** ペアリング、着信/発信の検知、通話時間の警告、SMS監視、アプリインストール検知、アプリ初回起動検知、LINE通話の検知・通話時間・遠隔切断、通常電話の遠隔切断(Family WebおよびSlack経由)、Slack通知、ハートビート、サーバー再起動からの自動復帰(36秒)、端末再起動からの復帰。
+**実機で検証済み:** ペアリング、着信/発信の検知(ROLE_DIALER有無の両方)、通話時間の警告、SMS監視、アプリインストール検知、アプリ初回起動検知、LINE通話の検知・通話時間・遠隔切断、通常電話の遠隔切断(Family WebおよびSlack経由)、Slack通知、ハートビート、サーバー再起動からの自動復帰(36秒)、端末再起動からの復帰。
 
 **未実施:** FCM(Firebase未設定。遠隔コマンドは通話中5秒ポーリングで配信されるため実用上は動作するが、通話していない時間帯は最長15分の遅延)。
 
@@ -414,7 +414,6 @@ sudo docker compose exec -T app java -cp app.jar com.fraudguard.server.tools.Sen
 
 ## 残っている作業
 
-0. **`CallMonitorService` がイベントを送っていない** — ROLE_DIALERを取らずに通話を監視する軽量版(要件4.3章[v2]の第1段階)は、通話状態の検知までは実装されているがサーバーへ報告していない。そのため**デフォルト電話アプリにしない限り通常の電話は一切検知できない**。らくらくスマートフォンのように電話アプリの入れ替えが望ましくない端末では、ここが埋まらないと電話の見守りが成立しない
 1. **FCM** — Firebaseプロジェクトを作り、サービスアカウントJSONを `/etc/fraudguard/fcm-service-account.json` へ、`google-services.json` を `monitor-android/app/` へ配置する。現状は遠隔コマンドが通話外で最長15分遅れる
 2. **通知監視の本体** — `FraudGuardNotificationListenerService` は通話中通知(CallStyle)は処理するが、それ以外の通知から詐欺兆候を推定する部分(要件10.3章のconfidence付き `NOTIFICATION_OBSERVED`)は未実装
 3. **端末側RiskEngine**(要件24章、オフライン判定)

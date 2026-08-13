@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
+import com.fraudguard.monitor.call.CallMonitorService
 import com.fraudguard.monitor.ui.dashboard.DashboardScreen
 import com.fraudguard.monitor.ui.home.HomeScreen
 import com.fraudguard.monitor.ui.onboarding.PairingScreen
@@ -59,6 +60,11 @@ class MainActivity : ComponentActivity() {
         // 既に起動中のアプリを前面に戻しただけでは再走査されないため、画面表示のたびにも走らせる
         // (実機テストで、アプリを開き直しても新規インストールが検知されない問題として発覚)。
         val app = application as FraudGuardApplication
+        // requirements.md 4.3章[v2]: デフォルト電話アプリにしない構成では、このサービスが通話を監視する。
+        // 画面表示時に起こす。Application.onCreateから起こすと、バックグラウンドで起こされた場合に
+        // Android 12以降のフォアグラウンドサービス起動制限に触れる。
+        CallMonitorService.startIfDialerRoleNotHeld(this)
+
         lifecycleScope.launch {
             withContext(Dispatchers.IO) {
                 runCatching { app.appInstallScanner.scan() }

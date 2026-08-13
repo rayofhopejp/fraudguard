@@ -59,8 +59,13 @@ object RiskEngine {
         classification: PhoneNumberClassifier.Classification,
         status: WhitelistStatus,
         sourceApp: String? = null,
+        hasPhoneNumber: Boolean = true,
     ): RiskAssessment {
         if (sourceApp != null) return appCallAssessment(sourceApp)
+        // requirements.md 4.3章[v2]: デフォルト電話アプリでない構成では番号が取れないことがある
+        // (発信では取得手段が無い)。番号が「無い」のと「壊れている」のは別で、
+        // 前者を7.6章の不正形式として扱うと、判定理由が事実と違ってしまう。
+        if (!hasPhoneNumber) return unknownNumberCallAssessment()
         if (status.isBlacklisted) {
             return RiskAssessment(RiskLevel.CRITICAL, "ブラックリスト登録済みの番号です")
         }
@@ -122,6 +127,18 @@ object RiskEngine {
      */
     private fun appCallAssessment(sourceApp: String): RiskAssessment =
         RiskAssessment(RiskLevel.WARNING, "${appLabel(sourceApp)}のアプリ内通話です(相手は特定できません)")
+
+    /**
+     * requirements.md 4.3章[v2]: 相手の番号が取れなかった通話。
+     *
+     * 番号が無い以上、6章のホワイトリスト照合も5章の国内/海外判定も成立せず、
+     * 危険とも安全とも言えない。ここで警告に上げると、本人がかけた電話すべてが警告になり
+     * 30章のアラート疲れを招くため、通話の開始自体は記録に留める。
+     * 一方7.4章の通話時間の警告は番号が無くても成立し、そちらは通常どおり警告に上がる
+     * (長電話であること自体が兆候であり、相手が分からないことはそれを弱めない)。
+     */
+    fun unknownNumberCallAssessment(): RiskAssessment =
+        RiskAssessment(RiskLevel.NOTICE, "相手の番号を取得できませんでした")
 
     /** requirements.md 10.3章: 家族が「家族の通話」とマークした通話。以降は通知しない。 */
     fun markedFamilyCallAssessment(): RiskAssessment =

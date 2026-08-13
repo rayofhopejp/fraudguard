@@ -36,6 +36,12 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+    <!--
+        requirements.md 4.3章[v2]: ROLE_DIALERを取らない構成の通話監視サービス用。
+        phoneCall種別はデフォルト電話アプリでないと起動できず(実機でSecurityExceptionを確認)、
+        「電話アプリを置き換えずに監視する」という目的と両立しない。
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- requirements.md 8章, 4.3章[v2]: ROLE_DIALER(デフォルト電話アプリ)化のための権限。 -->
     <uses-permission android:name="android.permission.CALL_PHONE" />
@@ -64,11 +70,19 @@
             </intent-filter>
         </activity>
 
-        <!-- requirements.md 4.3章[v2]: ROLE_DIALER不要な軽量版の通話監視サービス -->
+        <!--
+            requirements.md 4.3章[v2]: ROLE_DIALER不要な軽量版の通話監視サービス。
+            種別にphoneCallは使えない。あれはデフォルト電話アプリ専用で、
+            ROLE_DIALERを持たない状態で起動しようとするとSecurityExceptionでアプリが落ちる。
+        -->
         <service
             android:name=".call.CallMonitorService"
             android:exported="false"
-            android:foregroundServiceType="phoneCall" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="家族の同意のもとで通話・SMSの詐欺兆候を継続的に監視するため" />
+        </service>
 
         <!-- requirements.md 10.2章: LINE/Telegram/Signal等の通知監視。ユーザーが設定画面で個別許可が必要。 -->
         <service

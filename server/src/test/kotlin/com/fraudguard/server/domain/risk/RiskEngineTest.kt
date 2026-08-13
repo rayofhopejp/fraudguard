@@ -63,6 +63,29 @@ class RiskEngineTest {
         assertEquals(RiskLevel.WARNING, result.level)
     }
 
+    /**
+     * requirements.md 4.3章[v2]: 番号が取れなかった通話を「番号の形式が不正」と判定してはいけない。
+     * 判定理由が事実と食い違ううえ、本人がかけた電話まですべて警告になる。
+     */
+    @Test
+    fun `a call with no number is not treated as a malformed number`() {
+        val result = RiskEngine.evaluateCall(
+            CallDirection.OUTGOING,
+            PhoneNumberClassifier.classify(null),
+            notListed,
+            hasPhoneNumber = false,
+        )
+        assertEquals(RiskLevel.NOTICE, result.level)
+        assertFalse(result.reason.contains("不正"))
+        assertTrue(result.level.ordinal < RiskLevel.WARNING.ordinal, "単体では通知しないこと")
+    }
+
+    /** 番号が取れなくても、長電話であること自体は警告に値する。 */
+    @Test
+    fun `a long call still warns when the number could not be obtained`() {
+        assertEquals(RiskLevel.WARNING, RiskEngine.evaluateCallDuration(180, notListed).level)
+    }
+
     // --- 7.4 ---
 
     /** 端末が報告する最短の経過時間は1分。それ未満は報告として扱わない。 */
