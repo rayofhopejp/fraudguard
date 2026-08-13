@@ -5,11 +5,13 @@ import com.fraudguard.server.db.tables.Blacklist
 import com.fraudguard.server.db.tables.Whitelist
 import com.fraudguard.server.domain.model.WhitelistEntry
 import java.time.Instant
+import kotlinx.serialization.Serializable
 import java.util.UUID
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.select
+import org.jetbrains.exposed.sql.update
 
 /** requirements.md 6章: ホワイトリスト。サーバー側を正とし、監視端末へ同期される。 */
 object WhitelistRepository {
@@ -43,6 +45,33 @@ object WhitelistRepository {
             createdAt = now.toString(),
             updatedAt = now.toString(),
         )
+    }
+
+    /**
+     * requirements.md 6.1章: 登録済みエントリの編集。
+     *
+     * 電話番号は変更させない。番号が変わればそれは別の相手であり、
+     * 「◯◯さん」という名前だけが残ったまま中身がすり替わるのは危険。番号を直すなら消して登録し直す。
+     */
+    suspend fun update(
+        deviceId: String,
+        entryId: String,
+        displayName: String,
+        note: String?,
+        enabled: Boolean,
+    ): WhitelistEntry? = dbQuery {
+        val updated = Whitelist.update({ (Whitelist.deviceId eq deviceId) and (Whitelist.id eq entryId) }) {
+            it[Whitelist.displayName] = displayName
+            it[Whitelist.note] = note
+            it[Whitelist.enabled] = enabled
+            it[updatedAt] = Instant.now()
+        }
+        if (updated == 0) return@dbQuery null
+
+        Whitelist
+            .select { (Whitelist.deviceId eq deviceId) and (Whitelist.id eq entryId) }
+            .firstOrNull()
+            ?.toWhitelistEntry()
     }
 
     suspend fun delete(deviceId: String, entryId: String): Boolean = dbQuery {
@@ -101,6 +130,32 @@ object BlacklistRepository {
         BlacklistEntryDto(entryId = id, phoneNumber = phoneNumber, reason = reason, createdAt = now.toString())
     }
 
+    /** requirements.md 18章[v2]: 登録理由の編集。番号はホワイトリストと同じ理由で変更させない。 */
+    suspend fun update(deviceId: String, entryId: String, reason: String?): BlacklistEntryDto? = dbQuery {
+        val updated = Blacklist.update({ (Blacklist.deviceId eq deviceId) and (Blacklist.id eq entryId) }) {
+            it[Blacklist.reason] = reason
+        }
+        if (updated == 0) return@dbQuery null
+
+        Blacklist
+            .select { (Blacklist.deviceId eq deviceId) and (Blacklist.id eq entryId) }
+            .firstOrNull()
+            ?.let {
+                BlacklistEntryDto(
+                    entryId = it[Blacklist.id],
+                    phoneNumber = it[Blacklist.phoneNumber],
+                    reason = it[Blacklist.reason],
+                    createdAt = it[Blacklist.createdAt].toString(),
+                )
+            }
+    }
+
+    suspend fun delete(deviceId: String, entryId: String): Boolean = dbQuery {
+        Blacklist.deleteWhere {
+            it.run { (Blacklist.deviceId eq deviceId) and (Blacklist.id eq entryId) }
+        } > 0
+    }
+
     suspend fun isBlacklisted(deviceId: String, e164PhoneNumber: String): Boolean = dbQuery {
         Blacklist
             .select { (Blacklist.deviceId eq deviceId) and (Blacklist.phoneNumber eq e164PhoneNumber) }
@@ -109,4 +164,5 @@ object BlacklistRepository {
     }
 }
 
+@Serializable
 data class BlacklistEntryDto(val entryId: String, val phoneNumber: String, val reason: String?, val createdAt: String)

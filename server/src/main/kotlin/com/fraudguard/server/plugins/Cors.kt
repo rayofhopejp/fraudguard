@@ -47,6 +47,7 @@ fun Application.configureCors() {
         allowMethod(HttpMethod.Get)
         allowMethod(HttpMethod.Post)
         allowMethod(HttpMethod.Delete)
+        allowMethod(HttpMethod.Patch)
         allowMethod(HttpMethod.Options)
         // 認証はAuthorizationヘッダのJWTで行う。Cookieは使わないためallowCredentialsは有効にしない。
         allowHeader(HttpHeaders.Authorization)

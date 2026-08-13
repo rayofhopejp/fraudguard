@@ -1,5 +1,6 @@
 package com.fraudguard.server
 
+import com.fraudguard.server.db.repository.BlacklistEntryDto
 import com.fraudguard.server.db.repository.DeviceMemberDto
 import com.fraudguard.server.db.repository.FamilyMemberDto
 import com.fraudguard.server.domain.model.Event
@@ -7,6 +8,7 @@ import com.fraudguard.server.domain.model.EventMetadata
 import com.fraudguard.server.domain.model.EventType
 import com.fraudguard.server.domain.model.MonitoredDevice
 import com.fraudguard.server.domain.model.RiskLevel
+import com.fraudguard.server.domain.model.WhitelistEntry
 import kotlin.test.Test
 import kotlin.test.assertTrue
 import kotlinx.serialization.json.Json
@@ -39,6 +41,26 @@ class ApiSerializationTest {
             listOf(FamilyMemberDto("id", "名前", "a@example.invalid")),
         )
         assertTrue(encoded.contains("familyUserId"))
+    }
+
+    @Test
+    fun `blacklist serialises`() {
+        val encoded = json.encodeToString(
+            kotlinx.serialization.builtins.ListSerializer(BlacklistEntryDto.serializer()),
+            listOf(BlacklistEntryDto("id", "+819012345678", "詐欺の電話", "2026-08-14T00:00:00Z")),
+        )
+        assertTrue(encoded.contains("phoneNumber"))
+    }
+
+    @Test
+    fun `whitelist serialises`() {
+        val encoded = json.encodeToString(
+            kotlinx.serialization.builtins.ListSerializer(WhitelistEntry.serializer()),
+            listOf(
+                WhitelistEntry("id", "d", "+819012345678", "娘", true, null, "creator", "2026-08-14T00:00:00Z", "2026-08-14T00:00:00Z"),
+            ),
+        )
+        assertTrue(encoded.contains("displayName"))
     }
 
     @Test

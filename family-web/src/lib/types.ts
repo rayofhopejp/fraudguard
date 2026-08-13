@@ -67,3 +67,11 @@ export type DeviceMember = {
   email: string;
   isOwner: boolean;
 };
+
+/** requirements.md 18章[v2]: ブラックリスト。着信を常にCRITICALとして即時警告する(自動拒否はしない)。 */
+export type BlacklistEntry = {
+  entryId: string;
+  phoneNumber: string;
+  reason: string | null;
+  createdAt: string;
+};

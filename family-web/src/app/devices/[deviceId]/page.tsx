@@ -11,6 +11,7 @@ export default async function DeviceEventsPage({ params }: { params: { deviceId:
     <main style={{ maxWidth: 640, margin: "0 auto", padding: 24 }}>
       <p>
         <a href="/devices">← 端末一覧</a> ・ <a href={`/devices/${params.deviceId}/whitelist`}>ホワイトリスト管理</a> ・{" "}
+        <a href={`/devices/${params.deviceId}/blacklist`}>ブラックリスト管理</a> ・{" "}
         <a href={`/devices/${params.deviceId}/members`}>見守っている家族</a>
       </p>
       <h1>警告履歴</h1>

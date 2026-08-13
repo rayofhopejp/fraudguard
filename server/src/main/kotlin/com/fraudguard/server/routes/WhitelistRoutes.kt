@@ -13,6 +13,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
+import io.ktor.server.routing.patch
 import io.ktor.server.routing.post
 import kotlinx.serialization.Serializable
 
@@ -21,6 +22,13 @@ data class WhitelistCreateRequest(val phoneNumber: String, val displayName: Stri
 
 @Serializable
 data class BlacklistCreateRequest(val phoneNumber: String, val reason: String? = null)
+
+/** 電話番号は編集させない(番号が変われば別の相手であり、登録し直すのが筋)。 */
+@Serializable
+data class WhitelistUpdateRequest(val displayName: String, val note: String? = null, val enabled: Boolean = true)
+
+@Serializable
+data class BlacklistUpdateRequest(val reason: String? = null)
 
 /** requirements.md 23章, 6章: ホワイトリストCRUD。サーバー側を正とし、Monitorはローカルキャッシュへ同期する。 */
 fun Route.whitelistRoutes() {
@@ -54,6 +62,18 @@ fun Route.whitelistRoutes() {
         call.respond(HttpStatusCode.Created, entry)
     }
 
+    patch("/devices/{deviceId}/whitelist/{entryId}") {
+        val principal = call.principal<FamilyUserPrincipal>() ?: return@patch call.respond(HttpStatusCode.Unauthorized)
+        val deviceId = call.parameters["deviceId"] ?: return@patch call.respond(HttpStatusCode.BadRequest)
+        val entryId = call.parameters["entryId"] ?: return@patch call.respond(HttpStatusCode.BadRequest)
+        if (!DeviceRepository.isMember(deviceId, principal.familyUserId)) return@patch call.respond(HttpStatusCode.Forbidden)
+
+        val request = call.receive<WhitelistUpdateRequest>()
+        val updated = WhitelistRepository.update(deviceId, entryId, request.displayName, request.note, request.enabled)
+            ?: return@patch call.respond(HttpStatusCode.NotFound)
+        call.respond(HttpStatusCode.OK, updated)
+    }
+
     delete("/devices/{deviceId}/whitelist/{entryId}") {
         val principal = call.principal<FamilyUserPrincipal>() ?: return@delete call.respond(HttpStatusCode.Unauthorized)
         val deviceId = call.parameters["deviceId"] ?: return@delete call.respond(HttpStatusCode.BadRequest)
@@ -85,5 +105,27 @@ fun Route.whitelistRoutes() {
         }
         val entry = BlacklistRepository.add(deviceId, classification.e164, request.reason, principal.familyUserId)
         call.respond(HttpStatusCode.Created, entry)
+    }
+
+    patch("/devices/{deviceId}/blacklist/{entryId}") {
+        val principal = call.principal<FamilyUserPrincipal>() ?: return@patch call.respond(HttpStatusCode.Unauthorized)
+        val deviceId = call.parameters["deviceId"] ?: return@patch call.respond(HttpStatusCode.BadRequest)
+        val entryId = call.parameters["entryId"] ?: return@patch call.respond(HttpStatusCode.BadRequest)
+        if (!DeviceRepository.isMember(deviceId, principal.familyUserId)) return@patch call.respond(HttpStatusCode.Forbidden)
+
+        val request = call.receive<BlacklistUpdateRequest>()
+        val updated = BlacklistRepository.update(deviceId, entryId, request.reason)
+            ?: return@patch call.respond(HttpStatusCode.NotFound)
+        call.respond(HttpStatusCode.OK, updated)
+    }
+
+    delete("/devices/{deviceId}/blacklist/{entryId}") {
+        val principal = call.principal<FamilyUserPrincipal>() ?: return@delete call.respond(HttpStatusCode.Unauthorized)
+        val deviceId = call.parameters["deviceId"] ?: return@delete call.respond(HttpStatusCode.BadRequest)
+        val entryId = call.parameters["entryId"] ?: return@delete call.respond(HttpStatusCode.BadRequest)
+        if (!DeviceRepository.isMember(deviceId, principal.familyUserId)) return@delete call.respond(HttpStatusCode.Forbidden)
+
+        val deleted = BlacklistRepository.delete(deviceId, entryId)
+        call.respond(if (deleted) HttpStatusCode.NoContent else HttpStatusCode.NotFound)
     }
 }

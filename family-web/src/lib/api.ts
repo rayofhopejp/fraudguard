@@ -1,4 +1,4 @@
-import type { DeviceMember, FraudGuardEvent, MonitoredDevice, WhitelistEntry } from "./types";
+import type { BlacklistEntry, DeviceMember, FraudGuardEvent, MonitoredDevice, WhitelistEntry } from "./types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
@@ -58,12 +58,40 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
+  updateWhitelistEntry: (
+    accessToken: string | undefined,
+    deviceId: string,
+    entryId: string,
+    body: { displayName: string; note?: string | null; enabled: boolean },
+  ) =>
+    request<WhitelistEntry>(`/devices/${deviceId}/whitelist/${entryId}`, accessToken, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
   deleteWhitelistEntry: (accessToken: string | undefined, deviceId: string, entryId: string) =>
     request<void>(`/devices/${deviceId}/whitelist/${entryId}`, accessToken, { method: "DELETE" }),
 
+  listBlacklist: (accessToken: string | undefined, deviceId: string) =>
+    request<BlacklistEntry[]>(`/devices/${deviceId}/blacklist`, accessToken),
+
+  updateBlacklistEntry: (
+    accessToken: string | undefined,
+    deviceId: string,
+    entryId: string,
+    body: { reason?: string | null },
+  ) =>
+    request<BlacklistEntry>(`/devices/${deviceId}/blacklist/${entryId}`, accessToken, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  deleteBlacklistEntry: (accessToken: string | undefined, deviceId: string, entryId: string) =>
+    request<void>(`/devices/${deviceId}/blacklist/${entryId}`, accessToken, { method: "DELETE" }),
+
   // requirements.md 18章[v2]: ブラックリスト登録は「常にCRITICAL即時警告」の効果を持つ(自動拒否はしない)。
   addBlacklistEntry: (accessToken: string | undefined, deviceId: string, body: { phoneNumber: string; reason?: string }) =>
-    request<{ entryId: string; phoneNumber: string }>(`/devices/${deviceId}/blacklist`, accessToken, {
+    request<BlacklistEntry>(`/devices/${deviceId}/blacklist`, accessToken, {
       method: "POST",
       body: JSON.stringify(body),
     }),
