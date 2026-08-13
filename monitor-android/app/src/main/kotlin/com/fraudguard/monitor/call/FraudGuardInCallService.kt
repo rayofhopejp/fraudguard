@@ -161,22 +161,31 @@ class FraudGuardInCallService : InCallService() {
     }
 
     /**
-     * requirements.md 4.2章, 7.4章: 通話がACTIVEになった時点からの経過時間を計測し、
+     * requirements.md 4.2章, 7.4章: 通話の経過時間を計測し、
      * 閾値(3分・5分・10分)に達するたびにCALL_LONG_DURATIONイベントを送る。
      *
      * 通話終了後にまとめて送るのではなく通話中に送るのが要点で、家族が「今まさに長引いている通話」を
      * 知って遠隔切断(8章)を判断できるようにするための情報。
+     *
+     * 経過時間は自前のタイマー開始時刻ではなく、システムが持つ実際の接続時刻
+     * (Call.Details.connectTimeMillis)から算出する。アプリのプロセスが通話中に落ちた場合
+     * (クラッシュ・OEMのバッテリー最適化・アプリ更新)、サービス再バインド時に
+     * 正しい経過時間で再開でき、既に過ぎた閾値は飛ばせるようにするため
+     * (自前計測だと再起動後に経過時間が0に戻り、以降の警告が二度と出なかった)。
      */
     private fun startDurationTracking(callId: String, call: Call) {
         if (durationJobs[callId]?.isActive == true) return
         val app = applicationContext as? FraudGuardApplication ?: return
         val phoneNumber = call.details?.handle?.schemeSpecificPart
+        val connectTimeMillis = call.details?.connectTimeMillis?.takeIf { it > 0 } ?: System.currentTimeMillis()
 
         durationJobs[callId] = serviceScope.launch {
-            var elapsed = 0L
             for (threshold in LONG_CALL_THRESHOLDS_SECONDS) {
-                delay((threshold - elapsed) * 1000)
-                elapsed = threshold
+                val elapsedSeconds = (System.currentTimeMillis() - connectTimeMillis) / 1000
+                val remaining = threshold - elapsedSeconds
+                // プロセス再起動後などで既に過ぎている閾値は、今さら通知しても意味がないので飛ばす。
+                if (remaining <= 0) continue
+                delay(remaining * 1000)
                 // 通話が既に終わっていたら報告しない(ジョブのキャンセルと競合した場合の保険)。
                 if (!activeCalls.containsKey(callId)) return@launch
 
