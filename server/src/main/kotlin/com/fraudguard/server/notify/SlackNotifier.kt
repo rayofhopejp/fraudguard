@@ -102,10 +102,16 @@ class SlackNotifier(
         event.metadata.phoneNumber?.let { fields += SlackField("相手番号", it) }
         event.metadata.durationSeconds?.let { fields += SlackField("通話時間", "${it}秒") }
         event.metadata.appName?.let { fields += SlackField("アプリ", it) }
+        event.metadata.sourceApp?.let { fields += SlackField("発生元アプリ", it) }
+        // requirements.md 10.3章: 通知からの推定は確実性が低いため、信頼度も併せて示す。
+        event.metadata.confidence?.let { fields += SlackField("信頼度", "%.0f%%".format(it * 100)) }
         // requirements.md 9章, 16.3章[v3]: SMS本文を含める。家族は本文を読まないと詐欺かどうか
         // 判断できないため、家族用の非公開Slackチャンネルに限り本文の掲載を許容する
         // (ロック画面プレビューからの覗き見リスクは残るという判断込み)。
-        event.metadata.messageBody?.let { fields += SlackField("SMS本文", truncateForSlack(it), short = false) }
+        event.metadata.messageBody?.let {
+            val label = if (event.type == EventType.NOTIFICATION_OBSERVED) "通知本文" else "SMS本文"
+            fields += SlackField(label, truncateForSlack(it), short = false)
+        }
         // requirements.md 17章: 「判定理由」を家族に伝える。
         event.metadata.reason?.let { fields += SlackField("判定理由", it, short = false) }
         fields += SlackField("発生時刻", event.timestamp)

@@ -150,6 +150,26 @@ object RiskEngine {
         }
     }
 
+    /**
+     * requirements.md 10.3章: メッセージアプリの通知から詐欺の兆候を推定する。
+     *
+     * 端末側は「本文に詐欺語句を含む」か「最近入れたアプリの通知」だけを送ってくる
+     * (通知をすべて送ると私的な会話まで家族に見せることになり、30章のアラート疲れもまねく)。
+     * ここでは本文を持つものだけを警告に上げ、本文の無い観測は記録に留める。
+     * 後者は14.2章「通話 → メッセージングアプリ導入 → 起動 → 通知発生」の材料として意味を持つ。
+     */
+    fun evaluateNotification(messageBody: String?): RiskAssessment {
+        val matched = messageBody?.let { body -> DANGEROUS_SMS_KEYWORDS.filter { body.contains(it) } }.orEmpty()
+        return if (matched.isEmpty()) {
+            RiskAssessment(RiskLevel.INFO, "メッセージアプリの通知を観測しました")
+        } else {
+            RiskAssessment(
+                RiskLevel.WARNING,
+                "詐欺でよく使われる語句を含む通知を検知しました(${matched.joinToString("、")})",
+            )
+        }
+    }
+
     /** requirements.md 12章: 新規アプリのリスク分類。 */
     fun evaluateAppInstall(category: AppRiskCategory): RiskAssessment = when (category) {
         AppRiskCategory.NORMAL -> RiskAssessment(RiskLevel.INFO, "一般アプリの新規インストール")

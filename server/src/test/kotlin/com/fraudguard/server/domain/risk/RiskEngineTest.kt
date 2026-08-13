@@ -117,6 +117,49 @@ class RiskEngineTest {
         assertEquals(RiskLevel.NOTICE, RiskEngine.evaluateSms(null).level)
     }
 
+    // --- 10.3章: メッセージアプリの通知 ---
+
+    @Test
+    fun `notification containing fraud keywords is escalated to WARNING`() {
+        val result = RiskEngine.evaluateNotification("口座番号を教えてください。至急、電子マネーを購入してください")
+        assertEquals(RiskLevel.WARNING, result.level)
+        assertTrue(result.reason.contains("口座"))
+        assertTrue(result.reason.contains("電子マネー"))
+    }
+
+    /**
+     * 本文の無い観測は記録に留める。端末は「最近入れたアプリが通知を出した」ことだけを送ってくる
+     * (中身は送らない)ので、単体では警告にせず14.2章の相関判定の材料として使う。
+     */
+    @Test
+    fun `notification without a body stays below the notification threshold`() {
+        val result = RiskEngine.evaluateNotification(null)
+        assertEquals(RiskLevel.INFO, result.level)
+        assertTrue(result.level.ordinal < RiskLevel.WARNING.ordinal)
+    }
+
+    @Test
+    fun `harmless notification body does not raise a warning`() {
+        assertEquals(RiskLevel.INFO, RiskEngine.evaluateNotification("今夜ごはんいる?").level)
+    }
+
+    /** requirements.md 14.2章: 通話 → メッセージングアプリ導入 → 起動 → 通知発生。 */
+    @Test
+    fun `messaging app install followed by launch and a notification correlates`() {
+        val now = Instant.now()
+        val events = listOf(
+            event(EventType.CALL_INCOMING, RiskLevel.WARNING, now.minusSeconds(900)),
+            event(EventType.APP_MESSAGING_INSTALLED, RiskLevel.WARNING, now.minusSeconds(600), packageName = "org.telegram.messenger"),
+            event(EventType.APP_LAUNCHED_AFTER_INSTALL, RiskLevel.NOTICE, now.minusSeconds(300), packageName = "org.telegram.messenger"),
+            event(EventType.NOTIFICATION_OBSERVED, RiskLevel.INFO, now.minusSeconds(60), packageName = "org.telegram.messenger"),
+        )
+        val findings = RiskEngine.evaluateCorrelation(events, now)
+        assertTrue(
+            findings.any { it.type == EventType.CORRELATED_RISK && it.title.contains("メッセージアプリ") },
+            "14.2章の相関が成立すること",
+        )
+    }
+
     // --- 12章 ---
 
     @Test

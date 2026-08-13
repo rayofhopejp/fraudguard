@@ -130,8 +130,10 @@ object RiskEvaluationService {
                 RiskEngine.evaluateAppInstall(AppRiskCategory.NORMAL)
             EventType.SMS_RECEIVED ->
                 RiskEngine.evaluateSms(request.metadata.messageBody)
-            // NOTIFICATION_OBSERVED, APP_LAUNCHED_AFTER_INSTALL, CALL_BURST_FOREIGN, CORRELATED_RISK,
-            // DEVICE_HEALTH は単一イベント判定の対象外(Monitor側の判定を尊重するか、相関判定側で扱う)。
+            EventType.NOTIFICATION_OBSERVED ->
+                RiskEngine.evaluateNotification(request.metadata.messageBody)
+            // APP_LAUNCHED_AFTER_INSTALL, CALL_BURST_FOREIGN, CORRELATED_RISK, DEVICE_HEALTH は
+            // 単一イベント判定の対象外(Monitor側の判定を尊重するか、相関判定側で扱う)。
             else -> null
         }
 

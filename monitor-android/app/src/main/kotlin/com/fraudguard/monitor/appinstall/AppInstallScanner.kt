@@ -26,6 +26,15 @@ class AppInstallScanner(
 ) {
     companion object {
         private const val KEY_LAST_SCAN_AT = "last_package_scan_at"
+        private const val KEY_RECENT_INSTALLS = "recent_installs"
+        private const val SEPARATOR = "\u0000"
+
+        /**
+         * 「最近入れたアプリ」とみなす期間。requirements.md 14.2章の
+         * 「通話 → メッセージングアプリ導入 → 起動 → 通知発生」を成立させるために、
+         * 通知監視側がこの期間だけ当該アプリの通知を観測対象として報告する。
+         */
+        private const val RECENT_INSTALL_WINDOW_MS = 24 * 60 * 60 * 1000L
 
         private val REMOTE_CONTROL_PACKAGES = setOf(
             "com.anydesk.anydeskandroid",
@@ -76,6 +85,7 @@ class AppInstallScanner(
                 detail = "$appName ($packageName)",
                 metadata = EventMetadata(packageName = packageName, appName = appName),
             )
+            rememberRecentInstall(packageName, now)
             // requirements.md 13章, 14.1章: 「導入直後に起動されたか」が遠隔操作詐欺の決め手になるため、
             // インストールを検知した時点で初回起動の監視対象に加える。
             launchDetector.watchForLaunch(packageName, appName)
@@ -104,5 +114,28 @@ class AppInstallScanner(
             RiskLevel.INFO,
             "アプリがインストールされました",
         )
+    }
+
+    /**
+     * requirements.md 14.2章: 直近にインストールされたアプリか。
+     * 通知監視(FraudGuardNotificationListenerService)が、
+     * 「入れさせられたアプリが実際に使われ始めた」ことを観測するために使う。
+     */
+    fun isRecentlyInstalled(packageName: String): Boolean {
+        val now = System.currentTimeMillis()
+        return prefs.getStringSet(KEY_RECENT_INSTALLS, emptySet())!!.any { entry ->
+            val parts = entry.split(SEPARATOR)
+            parts.size == 2 && parts[0] == packageName &&
+                (parts[1].toLongOrNull()?.let { now - it <= RECENT_INSTALL_WINDOW_MS } == true)
+        }
+    }
+
+    private fun rememberRecentInstall(packageName: String, now: Long) {
+        val kept = prefs.getStringSet(KEY_RECENT_INSTALLS, emptySet())!!.filter { entry ->
+            val parts = entry.split(SEPARATOR)
+            parts.size == 2 && (parts[1].toLongOrNull()?.let { now - it <= RECENT_INSTALL_WINDOW_MS } == true)
+        }.toMutableSet()
+        kept += "$packageName$SEPARATOR$now"
+        prefs.edit().putStringSet(KEY_RECENT_INSTALLS, kept).apply()
     }
 }
