@@ -2,7 +2,11 @@
 
 Android端末上での特殊詐欺・投資詐欺・遠隔操作詐欺の兆候を監視し、家族へリアルタイム通知するシステム。
 
-同意済みの家族端末へのサイドロード運用を前提とする(Google Play一般配布は対象外)。詳細な要件は [`docs/requirements.md`](./docs/requirements.md) を参照。
+同意済みの家族端末へのサイドロード運用を前提とする(Google Play一般配布は対象外)。
+
+> **見守りたいご家族の端末に設置する方へ** — 手順は [**導入手順書（らくらくフォン向け・ITの知識不要）**](./docs/install-rakuraku.md) をご覧ください。同意の取り方から、うまくいかないときの対処、やめ方まで書いてあります。
+
+詳細な要件は [`docs/requirements.md`](./docs/requirements.md)、サーバーの構築手順は [`docs/deployment.md`](./docs/deployment.md) を参照。
 
 ## 構成
 
