@@ -16,6 +16,10 @@ import org.slf4j.LoggerFactory
 
 /** requirements.md 2.2章: Slack Incoming Webhookへのリスクイベント通知。 */
 class SlackNotifier(private val webhookUrl: String) : FamilyNotifier {
+    private companion object {
+        const val MAX_SMS_BODY_CHARS = 500
+    }
+
     private val logger = LoggerFactory.getLogger(SlackNotifier::class.java)
     private val client = HttpClient(CIO)
     private val json = Json { encodeDefaults = true }
@@ -52,6 +56,13 @@ class SlackNotifier(private val webhookUrl: String) : FamilyNotifier {
         }
     }
 
+    /**
+     * 連結された長文SMSでSlackのペイロード上限に当たって通知そのものが落ちないよう、
+     * 実用上十分な長さで切り詰める(全文はFamily Webのイベント詳細で確認できる)。
+     */
+    private fun truncateForSlack(text: String): String =
+        if (text.length <= MAX_SMS_BODY_CHARS) text else text.take(MAX_SMS_BODY_CHARS) + "…(以下略)"
+
     private fun colorFor(level: RiskLevel): String = when (level) {
         RiskLevel.CRITICAL -> "#C62828"
         RiskLevel.WARNING -> "#F9A825"
@@ -64,6 +75,10 @@ class SlackNotifier(private val webhookUrl: String) : FamilyNotifier {
         event.metadata.phoneNumber?.let { fields += SlackField("相手番号", it) }
         event.metadata.durationSeconds?.let { fields += SlackField("通話時間", "${it}秒") }
         event.metadata.appName?.let { fields += SlackField("アプリ", it) }
+        // requirements.md 9章, 16.3章[v3]: SMS本文を含める。家族は本文を読まないと詐欺かどうか
+        // 判断できないため、家族用の非公開Slackチャンネルに限り本文の掲載を許容する
+        // (ロック画面プレビューからの覗き見リスクは残るという判断込み)。
+        event.metadata.messageBody?.let { fields += SlackField("SMS本文", truncateForSlack(it), short = false) }
         // requirements.md 17章: 「判定理由」を家族に伝える。
         event.metadata.reason?.let { fields += SlackField("判定理由", it, short = false) }
         fields += SlackField("発生時刻", event.timestamp)

@@ -24,20 +24,20 @@ fun main() {
     FamilyNotifierProvider.init(webhookUrl)
 
     runBlocking {
-        // requirements.md 31章シナリオD相当の、実際に起こりうるCRITICAL警告を模したサンプル。
+        // requirements.md 31章シナリオF相当の、SMS本文を含むWARNING警告を模したサンプル。
         val delivered = FamilyNotifierProvider.get().notify(
             Event(
                 eventId = "test-notification",
                 deviceId = "test-device",
-                type = EventType.CORRELATED_RISK,
-                riskLevel = RiskLevel.CRITICAL,
-                title = "遠隔操作詐欺の可能性が非常に高い",
-                detail = "未登録番号との通話の後、遠隔操作アプリがインストールされ直後に起動しました。",
+                type = EventType.SMS_RECEIVED,
+                riskLevel = RiskLevel.WARNING,
+                title = "SMSを受信しました",
+                detail = "監視端末がSMSを受信しました。",
                 timestamp = Instant.now().toString(),
                 metadata = EventMetadata(
                     phoneNumber = "+819012345678",
-                    appName = "AnyDesk",
-                    reason = "通話 → 遠隔操作アプリ導入 → 直後起動 の連鎖を検出",
+                    messageBody = "【還付金のお知らせ】お近くのATMへ行き、暗証番号を入力して振り込み手続きを完了してください。",
+                    reason = "詐欺でよく使われる語句を含むSMSを受信しました(ATM、還付金、振り込み、暗証番号)",
                 ),
             ),
             deviceName = "母のスマホ(テスト送信)",
