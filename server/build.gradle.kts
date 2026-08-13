@@ -87,3 +87,10 @@ tasks.register<JavaExec>("seedTestDevice") {
     mainClass.set("com.fraudguard.server.tools.SeedTestDeviceKt")
     classpath = sourceSets["main"].runtimeClasspath
 }
+
+tasks.register<JavaExec>("issueDisconnectCommand") {
+    group = "application"
+    description = "Issue a signed DISCONNECT_CALL command for the device's latest call (dev only)"
+    mainClass.set("com.fraudguard.server.tools.IssueDisconnectCommandKt")
+    classpath = sourceSets["main"].runtimeClasspath
+}

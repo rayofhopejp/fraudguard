@@ -37,6 +37,10 @@ object DeviceRepository {
         MonitoredDevices.select { MonitoredDevices.id eq deviceId }.singleOrNull()?.get(MonitoredDevices.name)
     }
 
+    suspend fun ownerOf(deviceId: String): String? = dbQuery {
+        MonitoredDevices.select { MonitoredDevices.id eq deviceId }.singleOrNull()?.get(MonitoredDevices.ownerFamilyUserId)
+    }
+
     /** requirements.md 8章[v2]: 遠隔コマンドのFCM即時送信先トークンの登録・更新(Monitorアプリが呼ぶ)。 */
     suspend fun updateFcmToken(deviceId: String, fcmToken: String) = dbQuery {
         MonitoredDevices.update({ MonitoredDevices.id eq deviceId }) {

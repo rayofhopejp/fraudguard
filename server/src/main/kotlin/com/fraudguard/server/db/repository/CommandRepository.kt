@@ -21,7 +21,12 @@ private const val COMMAND_TTL_SECONDS = 120L
 object CommandRepository {
     suspend fun create(deviceId: String, callId: String, type: CommandType, issuedByFamilyUserId: String): RemoteCommand = dbQuery {
         val commandId = UUID.randomUUID().toString()
-        val issuedAt = Instant.now()
+        // requirements.md 8.1章: 署名対象の文字列はDBを往復しても一致し続ける必要がある。
+        // Instant.now()はナノ秒精度だがPostgreSQLのTIMESTAMPはマイクロ秒までしか保持しないため、
+        // 切り捨てずに署名すると、pendingポーリング(8.1章[v2])でDBから読み戻した値と食い違い、
+        // 端末側の検証が必ずinvalid_signatureになる(実機テストで発覚)。
+        // DB実装差の影響も避けるためミリ秒へ丸めてから署名・保存する。
+        val issuedAt = Instant.now().truncatedTo(ChronoUnit.MILLIS)
         val expiresAt = issuedAt.plus(COMMAND_TTL_SECONDS, ChronoUnit.SECONDS)
         val nonce = UUID.randomUUID().toString()
 

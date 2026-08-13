@@ -114,7 +114,26 @@ class IntegrationSmokeTest {
             val verified = CommandSigner.verify(Ed25519PublicKeyParameters(publicKeyBytes, 0), payload, command.signature)
             assertTrue(verified, "サーバーが発行した署名が公開鍵で検証できること")
 
-            assertEquals(1, CommandRepository.listPending(deviceId).size)
+            val pending = CommandRepository.listPending(deviceId)
+            assertEquals(1, pending.size)
+
+            // requirements.md 8.1章[v2]: 端末はpendingポーリングでDBから読み戻した値を使って検証するため、
+            // 「メモリ上のオブジェクト」ではなく「DBを往復した値」で署名が通ることを確認する。
+            // (タイムスタンプ精度がDB往復で落ちて検証が壊れる問題を実機テストで踏んだためのリグレッションテスト)
+            val fromDb = pending.first()
+            val payloadFromDb = canonicalCommandPayload(
+                commandId = fromDb.commandId,
+                deviceId = fromDb.deviceId,
+                callId = fromDb.callId,
+                type = fromDb.type.name,
+                issuedAt = fromDb.issuedAt,
+                expiresAt = fromDb.expiresAt,
+                nonce = fromDb.nonce,
+            )
+            assertTrue(
+                CommandSigner.verify(Ed25519PublicKeyParameters(publicKeyBytes, 0), payloadFromDb, fromDb.signature),
+                "DBを往復した値でも署名検証が通ること(タイムスタンプ精度の欠落がないこと)",
+            )
             // 実運用ではGET /commands/pendingのルートハンドラがmarkDeliveredを呼ぶ(routes/CommandRoutes.kt)。
             // ここではルートを経由しないため、同じ副作用を明示的に再現しておく。
             CommandRepository.markDelivered(command.commandId)
