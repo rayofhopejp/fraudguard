@@ -27,6 +27,8 @@ import kotlinx.coroutines.launch
 class AppCallRegistry(
     private val eventReporter: EventSink,
     private val scope: CoroutineScope,
+    /** 経過時間の基準となる時計。テストで仮想時間に合わせるために差し替える。 */
+    private val nowMillis: () -> Long = System::currentTimeMillis,
 ) {
     /**
      * @param hangUpIntent 通話を切るためのPendingIntent。通知が提供していれば非null。
@@ -131,8 +133,9 @@ class AppCallRegistry(
      */
     private fun startDurationTracking(call: AppCall) {
         durationJobs[call.callId] = scope.launch {
-            for (threshold in LONG_CALL_THRESHOLDS_SECONDS) {
-                val elapsedSeconds = (System.currentTimeMillis() - call.startedAtMillis) / 1000
+            // アプリ内通話は1分の通知を出さない(requirements.md 7.4章)。
+            for (threshold in longCallThresholdsSeconds(includeFirstMinute = false)) {
+                val elapsedSeconds = (nowMillis() - call.startedAtMillis) / 1000
                 val remaining = threshold - elapsedSeconds
                 // 既に過ぎている閾値は、今さら通知しても意味がないので飛ばす。
                 if (remaining <= 0) continue

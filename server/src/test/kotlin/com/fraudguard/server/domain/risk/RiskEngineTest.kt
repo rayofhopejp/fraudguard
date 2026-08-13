@@ -65,16 +65,25 @@ class RiskEngineTest {
 
     // --- 7.4 ---
 
+    /** 端末が報告する最短の経過時間は1分。それ未満は報告として扱わない。 */
     @Test
-    fun `call under 180 seconds with unlisted number does not reach warning level`() {
-        assertEquals(RiskLevel.NOTICE, RiskEngine.evaluateCallDuration(179, notListed).level)
+    fun `call under a minute with unlisted number does not reach warning level`() {
+        assertEquals(RiskLevel.NOTICE, RiskEngine.evaluateCallDuration(59, notListed).level)
+    }
+
+    /** [v3] 1分の通知が通知閾値(WARNING以上)に届くこと。180秒のままだと1分の報告が黙殺される。 */
+    @Test
+    fun `long call at one minute with unlisted number is WARNING`() {
+        val result = RiskEngine.evaluateCallDuration(60, notListed)
+        assertEquals(RiskLevel.WARNING, result.level)
+        assertTrue(result.reason.contains("1分"), "何分通話しているかが判定理由に含まれること")
     }
 
     @Test
-    fun `long call at or over 180 seconds with unlisted number is WARNING`() {
-        val result = RiskEngine.evaluateCallDuration(180, notListed)
+    fun `long call at 15 minutes with unlisted number is WARNING`() {
+        val result = RiskEngine.evaluateCallDuration(900, notListed)
         assertEquals(RiskLevel.WARNING, result.level)
-        assertTrue(result.reason.contains("3分"), "何分通話しているかが判定理由に含まれること")
+        assertTrue(result.reason.contains("15分"))
     }
 
     @Test

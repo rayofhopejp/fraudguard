@@ -11,7 +11,8 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -46,13 +47,14 @@ class AppCallRegistryTest {
     fun `a call detected only by notification is reported with its source app`() = runTest {
         val reporter = RecordingEventReporter()
         val scope = TestScope(StandardTestDispatcher(testScheduler))
-        val registry = AppCallRegistry(reporter, scope)
+        val registry = AppCallRegistry(reporter, scope) { testScheduler.currentTime }
 
-        registry.onOngoingCallNotification(line, System.currentTimeMillis(), null, adoptCallId = null)
-        scope.advanceUntilIdle()
+        registry.onOngoingCallNotification(line, testScheduler.currentTime, null, adoptCallId = null)
+        scope.runCurrent()
 
         val (_, _, metadata) = reporter.ofType(EventType.CALL_INCOMING).single()
         assertEquals(line, metadata.sourceApp)
+        registry.onCallEnded(line)
     }
 
     /** Telecom経由で既に報告済みの通話は、通知側で二重に報告しないこと。 */
@@ -60,15 +62,15 @@ class AppCallRegistryTest {
     fun `a call already reported via telecom is adopted instead of reported again`() = runTest {
         val reporter = RecordingEventReporter()
         val scope = TestScope(StandardTestDispatcher(testScheduler))
-        val registry = AppCallRegistry(reporter, scope)
+        val registry = AppCallRegistry(reporter, scope) { testScheduler.currentTime }
 
         val call = registry.onOngoingCallNotification(
             line,
-            System.currentTimeMillis(),
+            testScheduler.currentTime,
             null,
             adoptCallId = "telecom-call-id",
         )
-        scope.advanceUntilIdle()
+        scope.runCurrent()
 
         assertEquals("telecom-call-id", call.callId)
         assertTrue(
@@ -76,6 +78,7 @@ class AppCallRegistryTest {
             "Telecom側が報告済みなので通知側は通話開始を報告しないこと",
         )
         assertEquals(setOf("telecom-call-id"), registry.activeCallIds())
+        registry.onCallEnded(line)
     }
 
     /** 通知は通話中に何度も更新される。そのたびに新しい通話として扱わないこと。 */
@@ -83,15 +86,16 @@ class AppCallRegistryTest {
     fun `notification updates during a call do not start a second call`() = runTest {
         val reporter = RecordingEventReporter()
         val scope = TestScope(StandardTestDispatcher(testScheduler))
-        val registry = AppCallRegistry(reporter, scope)
-        val startedAt = System.currentTimeMillis()
+        val registry = AppCallRegistry(reporter, scope) { testScheduler.currentTime }
+        val startedAt = testScheduler.currentTime
 
         val first = registry.onOngoingCallNotification(line, startedAt, null, adoptCallId = null)
         val second = registry.onOngoingCallNotification(line, startedAt, null, adoptCallId = null)
-        scope.advanceUntilIdle()
+        scope.runCurrent()
 
         assertEquals(first.callId, second.callId)
         assertEquals(1, reporter.ofType(EventType.CALL_INCOMING).size)
+        registry.onCallEnded(line)
     }
 
     /**
@@ -102,13 +106,16 @@ class AppCallRegistryTest {
     fun `long call warnings fire for an app internal call`() = runTest {
         val reporter = RecordingEventReporter()
         val scope = TestScope(StandardTestDispatcher(testScheduler))
-        val registry = AppCallRegistry(reporter, scope)
+        val registry = AppCallRegistry(reporter, scope) { testScheduler.currentTime }
 
-        registry.onOngoingCallNotification(line, System.currentTimeMillis(), null, adoptCallId = null)
-        scope.advanceUntilIdle()
+        registry.onOngoingCallNotification(line, testScheduler.currentTime, null, adoptCallId = null)
+        scope.advanceTimeBy(31 * 60 * 1000L)
+        scope.runCurrent()
 
         val durations = reporter.ofType(EventType.CALL_LONG_DURATION).map { it.third.durationSeconds }
-        assertEquals(listOf(180L, 300L, 600L), durations)
+        assertEquals(listOf(180L, 300L, 600L, 900L, 1800L), durations)
+        assertFalse(durations.contains(60L), "アプリ内通話では1分の通知を出さないこと")
+        registry.onCallEnded(line)
     }
 
     /** 通話が終わった後に、残っていた閾値の警告が飛ばないこと。 */
@@ -116,11 +123,12 @@ class AppCallRegistryTest {
     fun `long call warnings stop once the call ends`() = runTest {
         val reporter = RecordingEventReporter()
         val scope = TestScope(StandardTestDispatcher(testScheduler))
-        val registry = AppCallRegistry(reporter, scope)
+        val registry = AppCallRegistry(reporter, scope) { testScheduler.currentTime }
 
-        registry.onOngoingCallNotification(line, System.currentTimeMillis(), null, adoptCallId = null)
+        registry.onOngoingCallNotification(line, testScheduler.currentTime, null, adoptCallId = null)
         registry.onCallEnded(line)
-        scope.advanceUntilIdle()
+        scope.advanceTimeBy(31 * 60 * 1000L)
+        scope.runCurrent()
 
         assertTrue(reporter.ofType(EventType.CALL_LONG_DURATION).isEmpty())
     }
@@ -129,9 +137,9 @@ class AppCallRegistryTest {
     fun `a call is no longer active once its notification is removed`() = runTest {
         val reporter = RecordingEventReporter()
         val scope = TestScope(StandardTestDispatcher(testScheduler))
-        val registry = AppCallRegistry(reporter, scope)
+        val registry = AppCallRegistry(reporter, scope) { testScheduler.currentTime }
 
-        registry.onOngoingCallNotification(line, System.currentTimeMillis(), null, adoptCallId = null)
+        registry.onOngoingCallNotification(line, testScheduler.currentTime, null, adoptCallId = null)
         assertTrue(registry.hasActiveCall())
 
         registry.onCallEnded(line)
@@ -144,12 +152,13 @@ class AppCallRegistryTest {
     fun `a call without a hang up intent cannot be disconnected`() = runTest {
         val reporter = RecordingEventReporter()
         val scope = TestScope(StandardTestDispatcher(testScheduler))
-        val registry = AppCallRegistry(reporter, scope)
+        val registry = AppCallRegistry(reporter, scope) { testScheduler.currentTime }
 
-        val call = registry.onOngoingCallNotification(line, System.currentTimeMillis(), null, adoptCallId = null)
+        val call = registry.onOngoingCallNotification(line, testScheduler.currentTime, null, adoptCallId = null)
 
         assertFalse(registry.hangUp(call.callId))
         assertFalse(registry.hangUp("unknown-call-id"))
+        registry.onCallEnded(line)
     }
 
     /** 通話ごとにcallIdが変わること(前の通話のIDを名乗ると誤った通話を切ってしまう)。 */
@@ -157,13 +166,14 @@ class AppCallRegistryTest {
     fun `a later call gets its own call id`() = runTest {
         val reporter = RecordingEventReporter()
         val scope = TestScope(StandardTestDispatcher(testScheduler))
-        val registry = AppCallRegistry(reporter, scope)
+        val registry = AppCallRegistry(reporter, scope) { testScheduler.currentTime }
 
-        val first = registry.onOngoingCallNotification(line, System.currentTimeMillis(), null, adoptCallId = null)
+        val first = registry.onOngoingCallNotification(line, testScheduler.currentTime, null, adoptCallId = null)
         registry.onCallEnded(line)
-        val second = registry.onOngoingCallNotification(line, System.currentTimeMillis(), null, adoptCallId = null)
-        scope.advanceUntilIdle()
+        val second = registry.onOngoingCallNotification(line, testScheduler.currentTime, null, adoptCallId = null)
+        scope.runCurrent()
 
         assertNotEquals(first.callId, second.callId)
+        registry.onCallEnded(line)
     }
 }

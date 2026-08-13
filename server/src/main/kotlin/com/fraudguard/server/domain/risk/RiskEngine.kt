@@ -30,8 +30,10 @@ data class CorrelatedFinding(
  */
 object RiskEngine {
 
-    // requirements.md 7.4章[v2]: 3分(180秒)で最初の警告。将来的に閾値を設定可能にする(30章)。
-    private const val LONG_CALL_THRESHOLD_SECONDS = 180L
+    // requirements.md 7.4章[v3]: 端末は1分・3分・5分・10分・15分、以降15分おきに報告する。
+    // ここはその最短(1分)に合わせた下限で、それ未満の通話時間が届いたら報告として扱わない
+    // という保険にすぎない。どの経過時間で知らせるかを決めるのは端末側(LongCallThresholds)。
+    private const val LONG_CALL_THRESHOLD_SECONDS = 60L
 
     // requirements.md 7.5章: 10分以内に3件以上で大量着信とみなす。
     private const val BURST_WINDOW_MINUTES = 10L

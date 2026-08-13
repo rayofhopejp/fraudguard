@@ -204,7 +204,7 @@ class FraudGuardInCallService : InCallService() {
 
     /**
      * requirements.md 4.2章, 7.4章: 通話の経過時間を計測し、
-     * 閾値(3分・5分・10分)に達するたびにCALL_LONG_DURATIONイベントを送る。
+     * 閾値(1分・3分・5分・10分・15分、以降15分おき)に達するたびにCALL_LONG_DURATIONイベントを送る。
      *
      * 通話終了後にまとめて送るのではなく通話中に送るのが要点で、家族が「今まさに長引いている通話」を
      * 知って遠隔切断(8章)を判断できるようにするための情報。
@@ -223,7 +223,8 @@ class FraudGuardInCallService : InCallService() {
         val connectTimeMillis = call.details?.connectTimeMillis?.takeIf { it > 0 } ?: System.currentTimeMillis()
 
         durationJobs[callId] = serviceScope.launch {
-            for (threshold in LONG_CALL_THRESHOLDS_SECONDS) {
+            // 通常の電話は1分から知らせる(requirements.md 7.4章)。
+            for (threshold in longCallThresholdsSeconds(includeFirstMinute = true)) {
                 val elapsedSeconds = (System.currentTimeMillis() - connectTimeMillis) / 1000
                 val remaining = threshold - elapsedSeconds
                 // プロセス再起動後などで既に過ぎている閾値は、今さら通知しても意味がないので飛ばす。
