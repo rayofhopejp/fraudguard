@@ -33,6 +33,8 @@ class EventSyncWorker(private val appContext: Context, params: WorkerParameters)
         // requirements.md 11章: 新規アプリの検知。ブロードキャストが届かない端末でも取りこぼさないよう、
         // 定期スキャンを正の経路とする(検出したイベントはこの後の未送信分としてまとめて送られる)。
         runCatching { app.appInstallScanner.scan() }
+        // requirements.md 13章: インストール済みアプリの初回起動検知。
+        runCatching { app.appLaunchDetector.checkLaunches() }
 
         val eventDao = app.database.eventDao()
         val unsynced = eventDao.getUnsynced()

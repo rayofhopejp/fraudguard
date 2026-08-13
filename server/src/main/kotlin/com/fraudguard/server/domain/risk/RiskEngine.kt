@@ -146,7 +146,14 @@ object RiskEngine {
                 it.riskLevel != RiskLevel.INFO
         }
 
-    /** requirements.md 14.1章: 通話 → 遠隔操作アプリ導入 → 直後起動、で「遠隔操作詐欺の可能性が非常に高い」。 */
+    /**
+     * requirements.md 14.1章: 通話 → 遠隔操作アプリ導入、で「遠隔操作詐欺の可能性が非常に高い」。
+     *
+     * 当初は「導入 → 直後起動」まで揃うことを条件にしていたが、起動検知(UsageStatsManager)は
+     * システムが使用状況を書き出すまで数分〜の遅れがあり、通話中というまさに介入したい時間帯に
+     * 間に合わないことが実機で分かった。通話中に遠隔操作アプリを入れさせられた時点で十分に危険なため、
+     * インストールだけで CRITICAL とし、起動が確認できた場合は文面を強める運用にしている。
+     */
     private fun evaluateRemoteControlPattern(events: List<Event>): CorrelatedFinding? {
         if (!hasNonWhitelistedCallActivity(events)) return null
 
@@ -159,13 +166,16 @@ object RiskEngine {
         val launchedMatchingInstall = events.any {
             it.type == EventType.APP_LAUNCHED_AFTER_INSTALL && it.metadata.packageName in installedPackages
         }
-        if (!launchedMatchingInstall) return null
 
         return CorrelatedFinding(
             type = EventType.CORRELATED_RISK,
             riskLevel = RiskLevel.CRITICAL,
             title = "遠隔操作詐欺の可能性が非常に高い",
-            detail = "未登録番号との通話の後、遠隔操作アプリがインストールされ直後に起動しました。",
+            detail = if (launchedMatchingInstall) {
+                "未登録番号との通話の後、遠隔操作アプリがインストールされ直後に起動しました。"
+            } else {
+                "未登録番号との通話の最中に、遠隔操作アプリがインストールされました。"
+            },
         )
     }
 

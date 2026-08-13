@@ -130,6 +130,23 @@ class RiskEngineTest {
         assertTrue(findings.any { it.type == EventType.CORRELATED_RISK && it.riskLevel == RiskLevel.CRITICAL })
     }
 
+    /**
+     * 起動検知(UsageStatsManager)はシステムの書き出し待ちで通話中には間に合わないため、
+     * 通話中のインストールだけで CRITICAL になる必要がある。
+     */
+    @Test
+    fun `call followed by remote control app install alone triggers CRITICAL correlation`() {
+        val now = Instant.now()
+        val events = listOf(
+            event(EventType.CALL_INCOMING, RiskLevel.WARNING, now.minusSeconds(600)),
+            event(EventType.APP_REMOTE_CONTROL_INSTALLED, RiskLevel.CRITICAL, now.minusSeconds(300), packageName = "com.anydesk.anydeskandroid"),
+        )
+        val findings = RiskEngine.evaluateCorrelation(events, now)
+        val finding = findings.single { it.type == EventType.CORRELATED_RISK }
+        assertEquals(RiskLevel.CRITICAL, finding.riskLevel)
+        assertTrue(finding.detail.contains("通話の最中に"))
+    }
+
     @Test
     fun `remote control app install without a preceding suspicious call does not correlate`() {
         val now = Instant.now()

@@ -52,7 +52,11 @@ class MainActivity : ComponentActivity() {
         // (実機テストで、アプリを開き直しても新規インストールが検知されない問題として発覚)。
         val app = application as FraudGuardApplication
         lifecycleScope.launch {
-            withContext(Dispatchers.IO) { runCatching { app.appInstallScanner.scan() } }
+            withContext(Dispatchers.IO) {
+                runCatching { app.appInstallScanner.scan() }
+                // requirements.md 13章: インストール済みアプリの初回起動検知もあわせて行う。
+                runCatching { app.appLaunchDetector.checkLaunches() }
+            }
         }
     }
 }

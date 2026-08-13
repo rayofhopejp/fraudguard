@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.fraudguard.monitor.FraudGuardApplication
 import com.fraudguard.monitor.permission.RequiredPermissions
 
 /**
@@ -39,8 +40,10 @@ import com.fraudguard.monitor.permission.RequiredPermissions
 @Composable
 fun PermissionRequestScreen(onDone: () -> Unit) {
     val context = LocalContext.current
+    val app = context.applicationContext as FraudGuardApplication
     var missingRuntime by remember { mutableStateOf(RequiredPermissions.missingRuntimePermissions(context)) }
     var notificationAccessGranted by remember { mutableStateOf(RequiredPermissions.isNotificationAccessGranted(context)) }
+    var usageAccessGranted by remember { mutableStateOf(app.appLaunchDetector.isUsageAccessGranted()) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
@@ -52,9 +55,10 @@ fun PermissionRequestScreen(onDone: () -> Unit) {
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                // 通知アクセス設定画面から戻ってきた場合などに再チェックする。
+                // 通知アクセス・使用状況アクセスの設定画面から戻ってきた場合などに再チェックする。
                 missingRuntime = RequiredPermissions.missingRuntimePermissions(context)
                 notificationAccessGranted = RequiredPermissions.isNotificationAccessGranted(context)
+                usageAccessGranted = app.appLaunchDetector.isUsageAccessGranted()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -100,11 +104,26 @@ fun PermissionRequestScreen(onDone: () -> Unit) {
                 }
             }
 
+            HorizontalDivider()
+
+            // requirements.md 13章: 「インストール直後にアプリを起動させられた」の検知に必要。
+            if (usageAccessGranted) {
+                Text(text = "✓ 使用状況へのアクセスは許可済みです(アプリの初回起動検知に使用)")
+            } else {
+                Text(text = "使用状況へのアクセス(遠隔操作アプリを入れさせられた直後の起動を検知)は設定画面から許可が必要です")
+                Button(onClick = {
+                    context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                }) {
+                    Text("使用状況アクセスの設定を開く")
+                }
+            }
+
             Button(
                 modifier = Modifier.fillMaxWidth(),
                 onClick = onDone,
             ) {
-                Text(if (missingRuntime.isEmpty() && notificationAccessGranted) "次へ進む" else "あとで設定する")
+                val allGranted = missingRuntime.isEmpty() && notificationAccessGranted && usageAccessGranted
+                Text(if (allGranted) "次へ進む" else "あとで設定する")
             }
         }
     }

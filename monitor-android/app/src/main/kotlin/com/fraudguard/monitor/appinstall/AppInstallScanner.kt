@@ -22,6 +22,7 @@ class AppInstallScanner(
     private val context: Context,
     private val prefs: SharedPreferences,
     private val eventReporter: EventReporter,
+    private val launchDetector: AppLaunchDetector,
 ) {
     companion object {
         private const val KEY_LAST_SCAN_AT = "last_package_scan_at"
@@ -75,6 +76,9 @@ class AppInstallScanner(
                 detail = "$appName ($packageName)",
                 metadata = EventMetadata(packageName = packageName, appName = appName),
             )
+            // requirements.md 13章, 14.1章: 「導入直後に起動されたか」が遠隔操作詐欺の決め手になるため、
+            // インストールを検知した時点で初回起動の監視対象に加える。
+            launchDetector.watchForLaunch(packageName, appName)
         }
 
         prefs.edit().putLong(KEY_LAST_SCAN_AT, now).apply()

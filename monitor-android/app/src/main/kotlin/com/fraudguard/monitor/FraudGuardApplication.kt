@@ -3,6 +3,7 @@ package com.fraudguard.monitor
 import android.app.Application
 import android.content.Context
 import com.fraudguard.monitor.appinstall.AppInstallScanner
+import com.fraudguard.monitor.appinstall.AppLaunchDetector
 import com.fraudguard.monitor.data.EventReporter
 import com.fraudguard.monitor.data.local.AppDatabase
 import com.fraudguard.monitor.heartbeat.HeartbeatWorker
@@ -27,16 +28,22 @@ class FraudGuardApplication : Application() {
     lateinit var appInstallScanner: AppInstallScanner
         private set
 
+    lateinit var appLaunchDetector: AppLaunchDetector
+        private set
+
     override fun onCreate() {
         super.onCreate()
         database = AppDatabase.getInstance(this)
         pairingRepository = PairingRepositoryImpl(this)
         eventReporter = EventReporter(database.eventDao(), pairingRepository)
+        // インストール済みパッケージの一覧は秘匿情報ではないため通常のSharedPreferencesで足りる。
+        val appScanPrefs = getSharedPreferences("fraudguard_app_scan", Context.MODE_PRIVATE)
+        appLaunchDetector = AppLaunchDetector(this, appScanPrefs, eventReporter)
         appInstallScanner = AppInstallScanner(
             context = this,
-            // インストール済みパッケージの一覧は秘匿情報ではないため通常のSharedPreferencesで足りる。
-            prefs = getSharedPreferences("fraudguard_app_scan", Context.MODE_PRIVATE),
+            prefs = appScanPrefs,
             eventReporter = eventReporter,
+            launchDetector = appLaunchDetector,
         )
 
         // requirements.md 11章: アプリ起動時にも新規インストールを走査する。

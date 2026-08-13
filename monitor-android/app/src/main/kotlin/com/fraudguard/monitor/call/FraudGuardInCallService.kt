@@ -130,9 +130,13 @@ class FraudGuardInCallService : InCallService() {
         }
 
         // requirements.md 14.1章: 「通話中に指示されてアプリを入れさせられる」のが典型的な手口のため、
-        // 通話終了直後にアプリの新規インストールを即スキャンする(定期スキャン待ちだと相関判定が遅れる)。
+        // 通話終了直後にアプリの新規インストールと初回起動を即チェックする
+        // (定期スキャン待ちだと相関判定が遅れる)。
         val app = applicationContext as? FraudGuardApplication ?: return
-        serviceScope.launch { runCatching { app.appInstallScanner.scan() } }
+        serviceScope.launch {
+            runCatching { app.appInstallScanner.scan() }
+            runCatching { app.appLaunchDetector.checkLaunches() }
+        }
     }
 
     /**
@@ -217,6 +221,13 @@ class FraudGuardInCallService : InCallService() {
                 val deviceId = pairingRepository.getDeviceId()
                 val apiKey = pairingRepository.getApiKey()
                 val serverPublicKey = pairingRepository.getServerPublicKey()
+
+                // requirements.md 13章, 14.1章: 詐欺犯に指示されてアプリを入れさせられ、その場で
+                // 起動させられるのが典型的な手口。通話中はインストールと起動の両方を毎回確認する。
+                // インストールを先に検知しないと起動監視の対象に登録されないため、順序も重要
+                // (起動チェックだけ回していて通話中のインストールを取りこぼす不具合を実機テストで発見)。
+                runCatching { app.appInstallScanner.scan() }
+                runCatching { app.appLaunchDetector.checkLaunches() }
 
                 if (deviceId != null && apiKey != null && serverPublicKey != null) {
                     runCatching {
