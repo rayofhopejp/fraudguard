@@ -9,6 +9,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.fraudguard.monitor.call.CallMonitorService
+import com.fraudguard.monitor.heartbeat.HeartbeatWorker
 import com.fraudguard.monitor.ui.dashboard.DashboardScreen
 import com.fraudguard.monitor.ui.home.HomeScreen
 import com.fraudguard.monitor.ui.onboarding.PairingScreen
@@ -40,7 +41,15 @@ class MainActivity : ComponentActivity() {
 
                 when (step) {
                     OnboardingStep.PAIRING ->
-                        PairingScreen(pairingRepository = pairingRepository, onPaired = { step = OnboardingStep.PERMISSIONS })
+                        PairingScreen(
+                            pairingRepository = pairingRepository,
+                            onPaired = {
+                                // requirements.md 35章[v2]: 設置したその場で家族側が「監視中」を
+                                // 確認できるよう、ペアリング直後に1回ハートビートを送る。
+                                HeartbeatWorker.sendNow(this@MainActivity)
+                                step = OnboardingStep.PERMISSIONS
+                            },
+                        )
                     OnboardingStep.PERMISSIONS ->
                         PermissionRequestScreen(onDone = { step = OnboardingStep.HOME })
                     OnboardingStep.HOME ->

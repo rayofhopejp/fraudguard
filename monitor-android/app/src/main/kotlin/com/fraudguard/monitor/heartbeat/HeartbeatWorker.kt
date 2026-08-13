@@ -6,7 +6,9 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -53,18 +55,38 @@ class HeartbeatWorker(private val appContext: Context, params: WorkerParameters)
 
     companion object {
         private const val WORK_NAME = "fraudguard-heartbeat"
+        private const val IMMEDIATE_WORK_NAME = "fraudguard-heartbeat-now"
+
+        private fun constraints() = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
 
         fun schedule(context: Context) {
-            val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build()
-
             val request = PeriodicWorkRequestBuilder<HeartbeatWorker>(30, TimeUnit.MINUTES)
-                .setConstraints(constraints)
+                .setConstraints(constraints())
                 .build()
 
+            // EventSyncWorkerと同じ理由でUPDATEを使う。KEEPだと、WorkManagerのDB上はENQUEUEDのまま
+            // JobSchedulerへの登録だけが失われた状態から永久に復帰できない。
+            // ハートビートが止まると家族には「監視が死んだ」ように見えるため、ここは特に効く。
             WorkManager.getInstance(context)
-                .enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, request)
+                .enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.UPDATE, request)
+            sendNow(context)
+        }
+
+        /**
+         * requirements.md 35章[v2]: いますぐ1回送る。
+         *
+         * 定期実行は最短でも30分後で、ペアリング直後は1件も届かない。
+         * 家族の画面には「監視状態を確認できません」と出たままになり、
+         * 設置作業をしたその場で見守りが機能していることを確認できない。
+         */
+        fun sendNow(context: Context) {
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                IMMEDIATE_WORK_NAME,
+                ExistingWorkPolicy.REPLACE,
+                OneTimeWorkRequestBuilder<HeartbeatWorker>().setConstraints(constraints()).build(),
+            )
         }
     }
 }

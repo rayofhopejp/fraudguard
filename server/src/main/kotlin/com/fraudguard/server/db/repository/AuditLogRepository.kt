@@ -1,5 +1,6 @@
 package com.fraudguard.server.db.repository
 
+import com.fraudguard.server.db.dbQuery
 import com.fraudguard.server.db.tables.AuditLogs
 import java.time.Instant
 import java.util.UUID
@@ -27,5 +28,18 @@ object AuditLogRepository {
             it[AuditLogs.detail] = detail
             it[createdAt] = Instant.now()
         }
+    }
+
+    /** ルートから直接呼ぶ用。既存のrecord()はトランザクション内から呼ばれる前提。 */
+    suspend fun recordSuspend(
+        actorFamilyUserId: String? = null,
+        actorDeviceId: String? = null,
+        action: String,
+        targetType: String? = null,
+        targetId: String? = null,
+        result: String,
+        detail: String? = null,
+    ) = dbQuery {
+        record(actorFamilyUserId, actorDeviceId, action, targetType, targetId, result, detail)
     }
 }

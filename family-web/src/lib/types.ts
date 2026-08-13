@@ -44,6 +44,7 @@ export interface FraudGuardEvent {
 export interface MonitoredDevice {
   deviceId: string;
   name: string;
+  createdAt: string;
   lastHeartbeatAt: string | null;
 }
 
@@ -58,3 +59,11 @@ export interface WhitelistEntry {
   createdAt: string;
   updatedAt: string;
 }
+
+/** requirements.md 16.2章: 端末を共有している家族。 */
+export type DeviceMember = {
+  familyUserId: string;
+  displayName: string;
+  email: string;
+  isOwner: boolean;
+};

@@ -2,17 +2,39 @@ import type { MonitoredDevice } from "@/lib/types";
 
 /**
  * requirements.md 35章[v2]: ハートビート断で「監視が止まっている可能性」を家族へ伝える。
- * ここでは簡易的にlastHeartbeatAtの経過時間だけで判定する(実際の閾値はサーバー側の設定に合わせる)。
+ *
+ * 「一度も受信していない」と「受信していたのに途切れた」を分ける。
+ * 登録直後はまだ1件も届いていないのが正常なのに、そこで警告色を出すと
+ * 設置に失敗したように見え、設置作業をしている家族を不必要に不安にさせる。
  */
-const STALE_THRESHOLD_MS = 4 * 60 * 60 * 1000; // 4時間(35.3章の例に合わせた仮値)
+const STALE_THRESHOLD_MS = 4 * 60 * 60 * 1000; // 4時間(35.3章のサーバー側閾値に合わせる)
+
+/** 登録直後に最初のハートビートを待てる時間。これを過ぎても届かなければ異常として扱う。 */
+const FIRST_HEARTBEAT_GRACE_MS = 60 * 60 * 1000;
+
+type Status = "ok" | "waiting" | "stale";
+
+export function deviceStatus(device: MonitoredDevice, nowMillis: number = Date.now()): Status {
+  if (device.lastHeartbeatAt) {
+    const since = nowMillis - new Date(device.lastHeartbeatAt).getTime();
+    return since > STALE_THRESHOLD_MS ? "stale" : "ok";
+  }
+  // 一度も届いていない場合は、登録からの経過時間で判断する。
+  const sinceCreated = nowMillis - new Date(device.createdAt).getTime();
+  return sinceCreated > FIRST_HEARTBEAT_GRACE_MS ? "stale" : "waiting";
+}
+
+const LABELS: Record<Status, string> = {
+  ok: "監視中",
+  waiting: "最初の確認を待っています",
+  stale: "監視状態を確認できません",
+};
 
 export function DeviceStatusBadge({ device }: { device: MonitoredDevice }) {
-  const isStale =
-    !device.lastHeartbeatAt || Date.now() - new Date(device.lastHeartbeatAt).getTime() > STALE_THRESHOLD_MS;
-
+  const status = deviceStatus(device);
   return (
-    <span className={isStale ? "device-status device-status--stale" : "device-status device-status--ok"}>
-      {isStale ? "監視状態を確認できません" : "監視中"}
+    <span className={status === "ok" ? "device-status device-status--ok" : "device-status device-status--stale"}>
+      {LABELS[status]}
     </span>
   );
 }
