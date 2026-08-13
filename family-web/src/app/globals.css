@@ -52,6 +52,12 @@ a {
   font-weight: 600;
 }
 
+/* requirements.md 17章[v2]: 認証後の画面なので相手の番号を出してよい。一覧で判断できることが要点。 */
+.event-card__counterparty {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+}
+
 .event-card__time {
   font-size: 0.8rem;
   opacity: 0.6;
