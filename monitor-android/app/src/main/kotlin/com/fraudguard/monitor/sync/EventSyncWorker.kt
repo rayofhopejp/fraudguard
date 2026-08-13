@@ -30,6 +30,10 @@ class EventSyncWorker(private val appContext: Context, params: WorkerParameters)
         val deviceId = pairingRepository.getDeviceId() ?: return Result.success() // 未ペアリングなら何もしない
         val apiKey = pairingRepository.getApiKey() ?: return Result.success()
 
+        // requirements.md 11章: 新規アプリの検知。ブロードキャストが届かない端末でも取りこぼさないよう、
+        // 定期スキャンを正の経路とする(検出したイベントはこの後の未送信分としてまとめて送られる)。
+        runCatching { app.appInstallScanner.scan() }
+
         val eventDao = app.database.eventDao()
         val unsynced = eventDao.getUnsynced()
         if (unsynced.isEmpty()) return Result.success()

@@ -28,8 +28,14 @@ object RiskEvaluationService {
     suspend fun ingestEvent(request: CreateEventRequest, deviceId: String) {
         val status = resolveWhitelistStatus(deviceId, request.metadata.phoneNumber)
         val assessment = classifySingleEvent(request, status)
-        val finalRequest = if (assessment != null && assessment.level != request.riskLevel) {
-            request.copy(riskLevel = assessment.level)
+        // requirements.md 17章: 家族には「なぜ警告なのか」(判定理由)が要る。サーバー側で
+        // リスクレベルを判定し直した場合、その理由をmetadata.reasonへ載せる。
+        // detailは端末側が入れた具体的な情報(アプリ名など)を残す方が有用なので上書きしない。
+        val finalRequest = if (assessment != null) {
+            request.copy(
+                riskLevel = assessment.level,
+                metadata = request.metadata.copy(reason = assessment.reason),
+            )
         } else {
             request
         }
@@ -96,7 +102,11 @@ object RiskEvaluationService {
                 RiskEngine.evaluateAppInstall(AppRiskCategory.REMOTE_CONTROL)
             EventType.APP_MESSAGING_INSTALLED ->
                 RiskEngine.evaluateAppInstall(AppRiskCategory.MESSAGING)
-            // SMS_RECEIVED, NOTIFICATION_OBSERVED, APP_LAUNCHED_AFTER_INSTALL, CALL_BURST_FOREIGN, CORRELATED_RISK,
+            EventType.APP_INSTALLED ->
+                RiskEngine.evaluateAppInstall(AppRiskCategory.NORMAL)
+            EventType.SMS_RECEIVED ->
+                RiskEngine.evaluateSms(request.metadata.messageBody)
+            // NOTIFICATION_OBSERVED, APP_LAUNCHED_AFTER_INSTALL, CALL_BURST_FOREIGN, CORRELATED_RISK,
             // DEVICE_HEALTH は単一イベント判定の対象外(Monitor側の判定を尊重するか、相関判定側で扱う)。
             else -> null
         }

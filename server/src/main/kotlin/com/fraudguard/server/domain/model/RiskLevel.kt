@@ -19,6 +19,9 @@ enum class EventType {
     CALL_LONG_DURATION,
     CALL_BURST_FOREIGN,
     SMS_RECEIVED,
+    // requirements.md 11章「新規アプリは原則としてすべて家族へ通知」に対応する、
+    // メッセージング系・遠隔操作系のいずれにも該当しない一般アプリのインストール。
+    APP_INSTALLED,
     APP_MESSAGING_INSTALLED,
     APP_REMOTE_CONTROL_INSTALLED,
     APP_LAUNCHED_AFTER_INSTALL,

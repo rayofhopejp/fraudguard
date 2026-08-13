@@ -88,6 +88,21 @@ object RiskEngine {
         return RiskAssessment(RiskLevel.WARNING, "未登録の番号と${minutes}分以上通話しています")
     }
 
+    /**
+     * requirements.md 9.1章: SMS本文の危険語判定。
+     * 通話との相関(14.3章)が無くても、危険語を含むSMS単体で家族へ知らせる価値があるため
+     * WARNINGへ引き上げる(9章「取得したSMSを家族へ通知する」と30章のアラート疲れ対策の折衷。
+     * 危険語を含まない日常的なSMSはNOTICEに留め、Slack通知は行わない)。
+     */
+    fun evaluateSms(messageBody: String?): RiskAssessment {
+        val matched = messageBody?.let { body -> DANGEROUS_SMS_KEYWORDS.filter { body.contains(it) } }.orEmpty()
+        return if (matched.isEmpty()) {
+            RiskAssessment(RiskLevel.NOTICE, "SMSを受信しました")
+        } else {
+            RiskAssessment(RiskLevel.WARNING, "詐欺でよく使われる語句を含むSMSを受信しました(${matched.joinToString("、")})")
+        }
+    }
+
     /** requirements.md 12章: 新規アプリのリスク分類。 */
     fun evaluateAppInstall(category: AppRiskCategory): RiskAssessment = when (category) {
         AppRiskCategory.NORMAL -> RiskAssessment(RiskLevel.INFO, "一般アプリの新規インストール")

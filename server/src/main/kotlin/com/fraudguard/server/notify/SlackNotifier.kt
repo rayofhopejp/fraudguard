@@ -46,6 +46,8 @@ class SlackNotifier(private val webhookUrl: String) : FamilyNotifier {
         event.metadata.phoneNumber?.let { fields += SlackField("相手番号", it) }
         event.metadata.durationSeconds?.let { fields += SlackField("通話時間", "${it}秒") }
         event.metadata.appName?.let { fields += SlackField("アプリ", it) }
+        // requirements.md 17章: 「判定理由」を家族に伝える。
+        event.metadata.reason?.let { fields += SlackField("判定理由", it, short = false) }
         fields += SlackField("発生時刻", event.timestamp)
         return fields
     }

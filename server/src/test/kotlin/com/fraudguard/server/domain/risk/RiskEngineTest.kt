@@ -80,6 +80,26 @@ class RiskEngineTest {
         assertNull(RiskEngine.evaluateCallDuration(600, whitelisted))
     }
 
+    // --- 9.1章: SMSの危険語判定 ---
+
+    @Test
+    fun `sms containing fraud keywords is escalated to WARNING with the matched words as the reason`() {
+        val result = RiskEngine.evaluateSms("ATMで還付金の手続きをしてください")
+        assertEquals(RiskLevel.WARNING, result.level)
+        assertTrue(result.reason.contains("ATM"), "判定理由に一致した語句が含まれること")
+        assertTrue(result.reason.contains("還付金"))
+    }
+
+    @Test
+    fun `harmless sms stays at NOTICE`() {
+        assertEquals(RiskLevel.NOTICE, RiskEngine.evaluateSms("今日は何時に帰る?").level)
+    }
+
+    @Test
+    fun `sms with no body does not crash and stays at NOTICE`() {
+        assertEquals(RiskLevel.NOTICE, RiskEngine.evaluateSms(null).level)
+    }
+
     // --- 12章 ---
 
     @Test

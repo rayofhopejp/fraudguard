@@ -106,6 +106,11 @@ class FraudGuardInCallService : InCallService() {
             pollJob?.cancel()
             pollJob = null
         }
+
+        // requirements.md 14.1章: 「通話中に指示されてアプリを入れさせられる」のが典型的な手口のため、
+        // 通話終了直後にアプリの新規インストールを即スキャンする(定期スキャン待ちだと相関判定が遅れる)。
+        val app = applicationContext as? FraudGuardApplication ?: return
+        serviceScope.launch { runCatching { app.appInstallScanner.scan() } }
     }
 
     /**

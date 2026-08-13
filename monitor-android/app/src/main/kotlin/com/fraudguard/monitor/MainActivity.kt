@@ -7,10 +7,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.lifecycleScope
 import com.fraudguard.monitor.ui.dashboard.DashboardScreen
 import com.fraudguard.monitor.ui.onboarding.PairingScreen
 import com.fraudguard.monitor.ui.onboarding.PermissionRequestScreen
 import com.fraudguard.monitor.ui.theme.FraudGuardMonitorTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private enum class OnboardingStep { PAIRING, PERMISSIONS, DASHBOARD }
 
@@ -38,6 +42,17 @@ class MainActivity : ComponentActivity() {
                         DashboardScreen()
                 }
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // requirements.md 11章: 新規アプリの走査。Application.onCreate はプロセス生成時にしか走らず、
+        // 既に起動中のアプリを前面に戻しただけでは再走査されないため、画面表示のたびにも走らせる
+        // (実機テストで、アプリを開き直しても新規インストールが検知されない問題として発覚)。
+        val app = application as FraudGuardApplication
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) { runCatching { app.appInstallScanner.scan() } }
         }
     }
 }
