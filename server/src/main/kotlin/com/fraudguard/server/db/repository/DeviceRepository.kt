@@ -70,6 +70,12 @@ object DeviceRepository {
             .groupBy(DeviceHeartbeats.deviceId)
             .associate { it[DeviceHeartbeats.deviceId] to it[lastHeartbeat] }
 
+        val revokedAt = DevicePairings
+            .slice(DevicePairings.deviceId, DevicePairings.revokedAt)
+            .selectAll()
+            .mapNotNull { row -> row[DevicePairings.revokedAt]?.let { row[DevicePairings.deviceId] to it } }
+            .toMap()
+
         (MonitoredDevices innerJoin DeviceMembers)
             .select { DeviceMembers.familyUserId eq familyUserId }
             .map { row ->
@@ -80,6 +86,7 @@ object DeviceRepository {
                     ownerFamilyUserId = row[MonitoredDevices.ownerFamilyUserId],
                     createdAt = row[MonitoredDevices.createdAt].toString(),
                     lastHeartbeatAt = heartbeats[deviceId]?.toString(),
+                    revokedAt = revokedAt[deviceId]?.toString(),
                 )
             }
     }

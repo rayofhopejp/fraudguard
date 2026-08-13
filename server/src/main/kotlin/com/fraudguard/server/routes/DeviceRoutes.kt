@@ -1,5 +1,6 @@
 package com.fraudguard.server.routes
 
+import com.fraudguard.server.db.repository.AuditLogRepository
 import com.fraudguard.server.db.repository.DeviceRepository
 import com.fraudguard.server.security.DevicePrincipal
 import com.fraudguard.server.security.FamilyUserPrincipal
@@ -49,6 +50,13 @@ fun Route.deviceRoutes() {
 
         // requirements.md 25章: デバイス紛失時、ペアリング無効化のみで即座に遮断できる設計。
         DeviceRepository.revoke(deviceId)
+        AuditLogRepository.recordSuspend(
+            actorFamilyUserId = principal.familyUserId,
+            action = "REVOKE_DEVICE_PAIRING",
+            targetType = "DEVICE",
+            targetId = deviceId,
+            result = "SUCCESS",
+        )
         call.respond(HttpStatusCode.OK)
     }
 }

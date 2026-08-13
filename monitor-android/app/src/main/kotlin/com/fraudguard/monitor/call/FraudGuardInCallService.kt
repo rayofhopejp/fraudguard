@@ -91,6 +91,9 @@ class FraudGuardInCallService : InCallService() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        // このサービスがバインドされた = デフォルト電話アプリになった、ということ。
+        // 軽量版の監視は役目を終えるので止める(残ると同じ通話を2件報告してしまう)。
+        stopService(Intent(this, CallMonitorService::class.java))
     }
 
     override fun onDestroy() {
@@ -225,7 +228,11 @@ class FraudGuardInCallService : InCallService() {
 
         durationJobs[callId] = serviceScope.launch {
             // 通常の電話は1分から知らせる(requirements.md 7.4章)。
-            for (threshold in longCallThresholdsSeconds(includeFirstMinute = true)) {
+            // 海外番号は取った時点で危険度が高いため、3秒・30秒でも知らせる(7.1章)。
+            for (threshold in longCallThresholdsSeconds(
+                includeFirstMinute = true,
+                foreign = isLikelyForeignNumber(phoneNumber),
+            )) {
                 val elapsedSeconds = (System.currentTimeMillis() - connectTimeMillis) / 1000
                 val remaining = threshold - elapsedSeconds
                 // プロセス再起動後などで既に過ぎている閾値は、今さら通知しても意味がないので飛ばす。

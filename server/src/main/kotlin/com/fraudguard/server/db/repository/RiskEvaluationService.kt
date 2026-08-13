@@ -97,6 +97,12 @@ object RiskEvaluationService {
         FamilyNotifierProvider.get().notify(event, deviceName)
     }
 
+    /** requirements.md 5.2章: 海外番号か。判定はlibphonenumber(PhoneNumberClassifier)に任せる。 */
+    private fun isForeignNumber(phoneNumber: String?): Boolean {
+        val classification = PhoneNumberClassifier.classify(phoneNumber)
+        return classification is PhoneNumberClassifier.Classification.Valid && !classification.isDomestic
+    }
+
     private suspend fun isMarkedFamilyCall(deviceId: String, callId: String?): Boolean =
         callId != null && MarkedCallRepository.isMarked(deviceId, callId)
 
@@ -122,7 +128,12 @@ object RiskEvaluationService {
                 )
             EventType.CALL_LONG_DURATION ->
                 request.metadata.durationSeconds?.let {
-                    RiskEngine.evaluateCallDuration(it, status, request.metadata.sourceApp)
+                    RiskEngine.evaluateCallDuration(
+                        it,
+                        status,
+                        request.metadata.sourceApp,
+                        isForeign = isForeignNumber(request.metadata.phoneNumber),
+                    )
                 }
             EventType.APP_REMOTE_CONTROL_INSTALLED ->
                 RiskEngine.evaluateAppInstall(AppRiskCategory.REMOTE_CONTROL)

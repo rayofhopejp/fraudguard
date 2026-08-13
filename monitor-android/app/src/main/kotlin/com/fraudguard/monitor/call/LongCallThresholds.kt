@@ -16,8 +16,30 @@ private val INITIAL_THRESHOLDS_SECONDS = listOf(60L, 180L, 300L, 600L, 900L)
 
 private const val REPEAT_INTERVAL_SECONDS = 900L
 
-internal fun longCallThresholdsSeconds(includeFirstMinute: Boolean): Sequence<Long> {
-    val initial = if (includeFirstMinute) INITIAL_THRESHOLDS_SECONDS else INITIAL_THRESHOLDS_SECONDS.drop(1)
+/**
+ * requirements.md 7.1章: 海外番号からの着信を「取ってしまった」場合の早期通知。
+ *
+ * 海外番号からの着信は、取った時点で既に危険度が高い。1分待つ理由がない。
+ * 家族が数十秒以内に気づいて本人へ連絡できるかどうかが、被害の有無を分けうる。
+ */
+private val FOREIGN_EARLY_THRESHOLDS_SECONDS = listOf(3L, 30L)
+
+/**
+ * 海外番号らしいか。サーバー側(libphonenumber)ほど厳密ではないが、
+ * 端末側は「早く知らせるかどうか」を決めるだけなので、この判定で足りる。
+ * 最終的なリスク判定はサーバーが行う。
+ */
+internal fun isLikelyForeignNumber(phoneNumber: String?): Boolean {
+    val digits = phoneNumber?.filter { it.isDigit() || it == '+' } ?: return false
+    return digits.startsWith("+") && !digits.startsWith("+81")
+}
+
+internal fun longCallThresholdsSeconds(
+    includeFirstMinute: Boolean,
+    foreign: Boolean = false,
+): Sequence<Long> {
+    val base = if (includeFirstMinute) INITIAL_THRESHOLDS_SECONDS else INITIAL_THRESHOLDS_SECONDS.drop(1)
+    val initial = if (foreign) FOREIGN_EARLY_THRESHOLDS_SECONDS + base else base
     val repeating = generateSequence(INITIAL_THRESHOLDS_SECONDS.last() + REPEAT_INTERVAL_SECONDS) {
         it + REPEAT_INTERVAL_SECONDS
     }

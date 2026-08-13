@@ -193,6 +193,14 @@ class CallMonitorService : Service() {
      * RINGINGを経ずにOFFHOOKへ入ったかどうかが、着信と発信を見分ける唯一の手がかりになる。
      */
     private fun handleStateChange(state: Int) {
+        // 起動後にデフォルト電話アプリになった場合、FraudGuardInCallServiceが同じ通話を報告する。
+        // 起動時の確認だけでは、既に走っているこのサービスが残り続けて二重報告になる
+        // (実機で、同じ着信が別々のcallIdで2件報告され、しかも片方が古い番号を載せていた)。
+        if (getSystemService<RoleManager>()?.isRoleHeld(RoleManager.ROLE_DIALER) == true) {
+            stopSelf()
+            return
+        }
+
         when (state) {
             TelephonyManager.CALL_STATE_RINGING -> {
                 currentCallId = UUID.randomUUID().toString()
@@ -274,7 +282,10 @@ class CallMonitorService : Service() {
 
         durationJob?.cancel()
         durationJob = serviceScope.launch {
-            for (threshold in longCallThresholdsSeconds(includeFirstMinute = true)) {
+            for (threshold in longCallThresholdsSeconds(
+                includeFirstMinute = true,
+                foreign = isLikelyForeignNumber(phoneNumber),
+            )) {
                 val remaining = threshold - (System.currentTimeMillis() - startedAtMillis) / 1000
                 if (remaining <= 0) continue
                 delay(remaining * 1000)

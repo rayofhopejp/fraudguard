@@ -12,9 +12,12 @@ const STALE_THRESHOLD_MS = 4 * 60 * 60 * 1000; // 4時間(35.3章のサーバー
 /** 登録直後に最初のハートビートを待てる時間。これを過ぎても届かなければ異常として扱う。 */
 const FIRST_HEARTBEAT_GRACE_MS = 60 * 60 * 1000;
 
-type Status = "ok" | "waiting" | "stale";
+type Status = "ok" | "waiting" | "stale" | "revoked";
 
 export function deviceStatus(device: MonitoredDevice, nowMillis: number = Date.now()): Status {
+  // 無効化した端末は「連絡が来ない」のが正常。異常として警告すると、
+  // 本当に壊れている端末と見分けがつかなくなる。
+  if (device.revokedAt) return "revoked";
   if (device.lastHeartbeatAt) {
     const since = nowMillis - new Date(device.lastHeartbeatAt).getTime();
     return since > STALE_THRESHOLD_MS ? "stale" : "ok";
@@ -28,12 +31,19 @@ const LABELS: Record<Status, string> = {
   ok: "監視中",
   waiting: "最初の確認を待っています",
   stale: "監視状態を確認できません",
+  revoked: "見守りを停止しました",
 };
 
 export function DeviceStatusBadge({ device }: { device: MonitoredDevice }) {
   const status = deviceStatus(device);
   return (
-    <span className={status === "ok" ? "device-status device-status--ok" : "device-status device-status--stale"}>
+    <span
+      className={
+        status === "ok" || status === "revoked"
+          ? "device-status device-status--ok"
+          : "device-status device-status--stale"
+      }
+    >
       {LABELS[status]}
     </span>
   );

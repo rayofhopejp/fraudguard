@@ -103,6 +103,10 @@ export const api = {
       body: JSON.stringify({ deviceName }),
     }),
 
+  // requirements.md 25章: ペアリングの無効化。端末のAPIキーが一切通らなくなる(履歴は残る)。
+  revokeDevice: (accessToken: string | undefined, deviceId: string) =>
+    request<void>(`/devices/${deviceId}/revoke`, accessToken, { method: "POST" }),
+
   // requirements.md 16.2章: 端末を共有している家族
   listDeviceMembers: (accessToken: string | undefined, deviceId: string) =>
     request<DeviceMember[]>(`/devices/${deviceId}/members`, accessToken),

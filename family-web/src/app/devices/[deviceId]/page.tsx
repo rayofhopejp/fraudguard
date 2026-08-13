@@ -1,6 +1,7 @@
 import { api } from "@/lib/api";
 import { requireAccessToken } from "@/lib/session";
 import { EventCard } from "@/components/EventCard";
+import { RevokeDeviceButton } from "./RevokeDeviceButton";
 
 /** requirements.md 17章, 19章: 特定端末の警告履歴一覧。 */
 export default async function DeviceEventsPage({ params }: { params: { deviceId: string } }) {
@@ -35,6 +36,15 @@ export default async function DeviceEventsPage({ params }: { params: { deviceId:
       {events?.map((event) => (
         <EventCard key={event.eventId} event={event} deviceName={deviceName} />
       ))}
+
+      {device?.revokedAt ? (
+        <p style={{ marginTop: 24, color: "#666" }}>
+          この端末の見守りは停止済みです（{new Date(device.revokedAt).toLocaleString("ja-JP")}）。
+          再開するには、もう一度ペアリングしてください。
+        </p>
+      ) : (
+        <RevokeDeviceButton deviceId={params.deviceId} deviceName={deviceName} />
+      )}
     </main>
   );
 }

@@ -120,6 +120,27 @@ class RiskEngineTest {
         assertEquals(RiskLevel.CRITICAL, RiskEngine.evaluateCallDuration(600, blacklisted).level)
     }
 
+    /**
+     * requirements.md 7.1章: 海外番号を取ってしまった通話は、経過時間の下限に関わらず最も重い警告。
+     * 60秒の下限を当てると、端末が送ってくる3秒・30秒の報告が家族に届かない。
+     */
+    @Test
+    fun `a foreign call is critical from the first seconds`() {
+        val three = RiskEngine.evaluateCallDuration(3, notListed, isForeign = true)
+        assertEquals(RiskLevel.CRITICAL, three.level)
+        assertTrue(three.reason.contains("3秒"), "秒で報告された場合は分に丸めないこと")
+
+        val thirty = RiskEngine.evaluateCallDuration(30, notListed, isForeign = true)
+        assertEquals(RiskLevel.CRITICAL, thirty.level)
+        assertTrue(thirty.reason.contains("30秒"))
+    }
+
+    /** 海外番号でもホワイトリスト登録済みなら警告しない(海外在住の家族など)。 */
+    @Test
+    fun `a whitelisted foreign number is still not alerted`() {
+        assertEquals(RiskLevel.INFO, RiskEngine.evaluateCallDuration(3, whitelisted, isForeign = true).level)
+    }
+
     // --- 9.1章: SMSの危険語判定 ---
 
     @Test

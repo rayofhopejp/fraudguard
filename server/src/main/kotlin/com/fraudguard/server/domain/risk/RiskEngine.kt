@@ -101,10 +101,22 @@ object RiskEngine {
         durationSeconds: Long,
         status: WhitelistStatus,
         sourceApp: String? = null,
+        isForeign: Boolean = false,
     ): RiskAssessment {
         if (sourceApp != null) return appCallAssessment(sourceApp)
         if (status.isBlacklisted) return RiskAssessment(RiskLevel.CRITICAL, "ブラックリスト登録済みの番号との通話です")
         if (status.isWhitelisted) return RiskAssessment(RiskLevel.INFO, "ホワイトリスト登録済みの番号との通話です")
+
+        // requirements.md 7.1章: 海外番号との通話は、取ってしまった時点で既に危険度が高い。
+        // 端末は3秒・30秒でも報告してくるので、1分の下限を当てると握り潰してしまう。
+        // 通話が繋がったままであること自体を最も重い警告として扱う。
+        if (isForeign) {
+            return RiskAssessment(
+                RiskLevel.CRITICAL,
+                "海外番号との通話が続いています(${describeElapsed(durationSeconds)})",
+            )
+        }
+
         if (durationSeconds < LONG_CALL_THRESHOLD_SECONDS) {
             return RiskAssessment(RiskLevel.NOTICE, "通話中です")
         }
@@ -112,6 +124,10 @@ object RiskEngine {
         val minutes = durationSeconds / 60
         return RiskAssessment(RiskLevel.WARNING, "未登録の番号と${minutes}分以上通話しています")
     }
+
+    /** 3秒・30秒といった短い経過も扱うため、分に丸めずそのまま伝える。 */
+    private fun describeElapsed(durationSeconds: Long): String =
+        if (durationSeconds < 60) "${durationSeconds}秒経過" else "${durationSeconds / 60}分経過"
 
     /**
      * requirements.md 10.3章: LINE等のアプリ内通話に対する判定。

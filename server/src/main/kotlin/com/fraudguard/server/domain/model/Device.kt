@@ -9,6 +9,12 @@ data class MonitoredDevice(
     val ownerFamilyUserId: String,
     val createdAt: String,
     val lastHeartbeatAt: String? = null,
+    /**
+     * requirements.md 25章: ペアリングを無効化した日時。無効化するとこの端末のAPIキーは
+     * 一切通らなくなる(DeviceAuthRepositoryが弾く)。
+     * 一覧でこれが分からないと、「無効化した端末」と「壊れて連絡が来ない端末」の区別がつかない。
+     */
+    val revokedAt: String? = null,
 )
 
 /** requirements.md 34章: ペアリング完了時にサーバーが払い出す公開鍵情報。 */

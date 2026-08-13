@@ -46,6 +46,8 @@ export interface MonitoredDevice {
   name: string;
   createdAt: string;
   lastHeartbeatAt: string | null;
+  /** ペアリングを無効化した日時。設定されていればこの端末はもう何も送ってこない。 */
+  revokedAt: string | null;
 }
 
 export interface WhitelistEntry {

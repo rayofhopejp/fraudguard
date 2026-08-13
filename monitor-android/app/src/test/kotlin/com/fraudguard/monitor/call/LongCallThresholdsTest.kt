@@ -2,6 +2,7 @@ package com.fraudguard.monitor.call
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /** requirements.md 7.4章[v3]: 1分・3分・5分・10分・15分、以降15分おき。 */
@@ -28,5 +29,29 @@ class LongCallThresholdsTest {
         assertTrue(thresholds.zipWithNext().all { (a, b) -> b > a }, "経過時間は単調増加であること")
         val tail = thresholds.takeLast(10)
         assertTrue(tail.zipWithNext().all { (a, b) -> b - a == 900L }, "終盤は15分間隔であること")
+    }
+
+    /** requirements.md 7.1章: 海外番号を取ってしまったら、1分を待たず3秒・30秒でも知らせる。 */
+    @Test
+    fun `a foreign call is reported from three seconds`() {
+        val thresholds = longCallThresholdsSeconds(includeFirstMinute = true, foreign = true).take(7).toList()
+        assertEquals(listOf(3L, 30L, 60L, 180L, 300L, 600L, 900L), thresholds)
+    }
+
+    @Test
+    fun `a domestic call keeps the normal schedule`() {
+        val thresholds = longCallThresholdsSeconds(includeFirstMinute = true, foreign = false).take(3).toList()
+        assertEquals(listOf(60L, 180L, 300L), thresholds)
+    }
+
+    @Test
+    fun `foreign numbers are told apart from domestic ones`() {
+        assertTrue(isLikelyForeignNumber("+18599437476"))
+        assertTrue(isLikelyForeignNumber("+1 859-943-7476"))
+        assertFalse(isLikelyForeignNumber("+819012345678"))
+        assertFalse(isLikelyForeignNumber("09012345678"))
+        // 番号が取れない通話を海外扱いすると、本人がかけた電話まで最も重い警告になる。
+        assertFalse(isLikelyForeignNumber(null))
+        assertFalse(isLikelyForeignNumber(""))
     }
 }
