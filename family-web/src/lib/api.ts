@@ -4,7 +4,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
 /**
  * requirements.md 23章: サーバーREST APIのFamily側クライアント(family-auth = Cognito JWT)。
- * TODO: NextAuthのセッションからidTokenを取得してAuthorizationヘッダに載せる。
+ * accessTokenはNextAuthのセッション(lib/auth.tsがCognitoのid_tokenを載せている)から渡す。
  */
 async function request<T>(path: string, accessToken: string | undefined, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -18,6 +18,8 @@ async function request<T>(path: string, accessToken: string | undefined, init?: 
   if (!response.ok) {
     throw new Error(`API request failed: ${response.status} ${path}`);
   }
+  // 204 No Content(ホワイトリスト削除など)はJSONボディを持たない。
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
@@ -38,6 +40,16 @@ export const api = {
 
   addWhitelistEntry: (accessToken: string | undefined, deviceId: string, body: { phoneNumber: string; displayName: string; note?: string }) =>
     request<WhitelistEntry>(`/devices/${deviceId}/whitelist`, accessToken, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  deleteWhitelistEntry: (accessToken: string | undefined, deviceId: string, entryId: string) =>
+    request<void>(`/devices/${deviceId}/whitelist/${entryId}`, accessToken, { method: "DELETE" }),
+
+  // requirements.md 18章[v2]: ブラックリスト登録は「常にCRITICAL即時警告」の効果を持つ(自動拒否はしない)。
+  addBlacklistEntry: (accessToken: string | undefined, deviceId: string, body: { phoneNumber: string; reason?: string }) =>
+    request<{ entryId: string; phoneNumber: string }>(`/devices/${deviceId}/blacklist`, accessToken, {
       method: "POST",
       body: JSON.stringify(body),
     }),

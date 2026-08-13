@@ -1,4 +1,5 @@
 import { api } from "@/lib/api";
+import { requireAccessToken } from "@/lib/session";
 import { RiskBadge } from "@/components/RiskBadge";
 import { EventActions } from "./EventActions";
 
@@ -12,7 +13,8 @@ export default async function EventDetailPage({
 }: {
   params: { deviceId: string; eventId: string };
 }) {
-  const events = await api.listEvents(undefined, params.deviceId).catch(() => []);
+  const accessToken = await requireAccessToken();
+  const events = await api.listEvents(accessToken, params.deviceId).catch(() => []);
   const event = events.find((e) => e.eventId === params.eventId);
 
   if (!event) {
@@ -37,6 +39,9 @@ export default async function EventDetailPage({
       {event.metadata.phoneNumber && <p>相手番号: {event.metadata.phoneNumber}</p>}
       {event.metadata.durationSeconds != null && <p>通話時間: {event.metadata.durationSeconds}秒</p>}
       {event.metadata.appName && <p>アプリ: {event.metadata.appName}</p>}
+      {event.metadata.messageBody && <p>SMS本文: {event.metadata.messageBody}</p>}
+      {/* requirements.md 17章: 判定理由 */}
+      {event.metadata.reason && <p>判定理由: {event.metadata.reason}</p>}
 
       <EventActions event={event} />
     </main>

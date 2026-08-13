@@ -1,9 +1,11 @@
 import { api } from "@/lib/api";
+import { requireAccessToken } from "@/lib/session";
 import { EventCard } from "@/components/EventCard";
 
 /** requirements.md 17章, 19章: 特定端末の警告履歴一覧。 */
 export default async function DeviceEventsPage({ params }: { params: { deviceId: string } }) {
-  const events = await api.listEvents(undefined, params.deviceId).catch(() => []);
+  const accessToken = await requireAccessToken();
+  const events = await api.listEvents(accessToken, params.deviceId).catch(() => []);
 
   return (
     <main style={{ maxWidth: 640, margin: "0 auto", padding: 24 }}>

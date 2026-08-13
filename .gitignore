@@ -28,6 +28,8 @@ node_modules/
 family-web/.next/
 family-web/out/
 family-web/.turbo/
+# TypeScriptのインクリメンタルビルド情報(生成物なのでコミットしない)
+*.tsbuildinfo
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

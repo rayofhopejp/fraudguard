@@ -1,6 +1,8 @@
+import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
+import { authOptions } from "@/lib/auth";
 
-// TODO: NextAuthのgetServerSession()でログイン状態を確認し、未ログインなら/loginへ。
-export default function RootPage() {
-  redirect("/devices");
+export default async function RootPage() {
+  const session = await getServerSession(authOptions);
+  redirect(session?.accessToken ? "/devices" : "/login");
 }

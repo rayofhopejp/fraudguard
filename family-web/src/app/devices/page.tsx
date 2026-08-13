@@ -1,13 +1,11 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { api } from "@/lib/api";
+import { requireAccessToken } from "@/lib/session";
 import { DeviceStatusBadge } from "@/components/DeviceStatusBadge";
 
 /** requirements.md 21章: 家族ユーザーが所属する監視対象端末の一覧(多対多)。 */
 export default async function DevicesPage() {
-  const session = await getServerSession(authOptions);
-  // TODO: session.accessToken (lib/auth.tsのjwtコールバックで型拡張後) を渡す
-  const devices = await api.listDevices(undefined).catch(() => []);
+  const accessToken = await requireAccessToken();
+  const devices = await api.listDevices(accessToken).catch(() => []);
 
   return (
     <main style={{ maxWidth: 640, margin: "0 auto", padding: 24 }}>
