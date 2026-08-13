@@ -14,6 +14,8 @@ import type { DeviceMember } from "@/lib/types";
  */
 export function MembersManager({ deviceId, members }: { deviceId: string; members: DeviceMember[] }) {
   const { data: session } = useSession();
+  const myEmail = session?.user?.email;
+  const iAmOwner = members.some((m) => m.isOwner && m.email === myEmail);
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -49,22 +51,32 @@ export function MembersManager({ deviceId, members }: { deviceId: string; member
               <br />
               <span style={{ color: "#666", fontSize: 14 }}>{member.email}</span>
             </span>
-            {!member.isOwner && (
+            {/*
+              他の家族を外せるのは端末を登録した人だけ。それ以外の人は自分だけ外せる。
+              押せない操作のボタンを見せると、できることを取り違えさせる。
+            */}
+            {!member.isOwner && (iAmOwner || member.email === myEmail) && (
               <button
                 disabled={pending}
                 onClick={() =>
                   run(
                     () => api.removeDeviceMember(session?.accessToken, deviceId, member.familyUserId),
-                    "共有を解除しました",
+                    member.email === myEmail ? "見守りから抜けました" : "共有を解除しました",
                   )
                 }
               >
-                共有をやめる
+                {member.email === myEmail ? "見守りから抜ける" : "共有をやめる"}
               </button>
             )}
           </li>
         ))}
       </ul>
+
+      {!iAmOwner && (
+        <p style={{ color: "#666", fontSize: 14 }}>
+          他の家族を外せるのは、この端末を登録した人だけです。
+        </p>
+      )}
 
       <h2 style={{ fontSize: 18, marginTop: 24 }}>家族を追加する</h2>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

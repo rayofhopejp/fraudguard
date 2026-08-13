@@ -77,12 +77,18 @@ fun Route.familyRoutes() {
             return@delete call.respond(HttpStatusCode.Forbidden)
         }
 
-        val removed = FamilyRepository.removeMember(deviceId, targetId)
-        if (!removed) {
-            return@delete call.respond(
-                HttpStatusCode.Conflict,
-                mapOf("error" to "cannot_remove_owner", "message" to "端末の登録者は共有から外せません。"),
-            )
+        when (FamilyRepository.removeMember(deviceId, targetId, principal.familyUserId)) {
+            FamilyRepository.RemoveMemberResult.CANNOT_REMOVE_OWNER ->
+                return@delete call.respond(
+                    HttpStatusCode.Conflict,
+                    mapOf("error" to "cannot_remove_owner", "message" to "端末の登録者は共有から外せません。"),
+                )
+            FamilyRepository.RemoveMemberResult.NOT_ALLOWED ->
+                return@delete call.respond(
+                    HttpStatusCode.Forbidden,
+                    mapOf("error" to "not_allowed", "message" to "他の家族を外せるのは、端末を登録した人だけです。"),
+                )
+            FamilyRepository.RemoveMemberResult.REMOVED -> Unit
         }
         AuditLogRepository.recordSuspend(
             actorFamilyUserId = principal.familyUserId,

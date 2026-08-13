@@ -59,11 +59,33 @@ class DeviceSharingIntegrationTest {
             assertEquals(2, FamilyRepository.listDeviceMembers(deviceId).size)
 
             // 所有者は外せない。外せると誰も管理できない端末が残る。
-            assertFalse(FamilyRepository.removeMember(deviceId, owner.familyUserId))
+            assertEquals(
+                FamilyRepository.RemoveMemberResult.CANNOT_REMOVE_OWNER,
+                FamilyRepository.removeMember(deviceId, owner.familyUserId, owner.familyUserId),
+            )
             assertTrue(DeviceRepository.isMember(deviceId, owner.familyUserId))
 
-            // 共有の解除後は再び見えなくなる。
-            assertTrue(FamilyRepository.removeMember(deviceId, other.familyUserId))
+            // 共有された人が、別の共有相手を外すことはできない。
+            val third = FamilyUserRepository.resolveOrCreate("sub-${UUID.randomUUID()}", "third-${UUID.randomUUID()}@example.invalid")
+            FamilyRepository.addMemberByEmail(deviceId, third.email)
+            assertEquals(
+                FamilyRepository.RemoveMemberResult.NOT_ALLOWED,
+                FamilyRepository.removeMember(deviceId, third.familyUserId, other.familyUserId),
+            )
+            assertTrue(DeviceRepository.isMember(deviceId, third.familyUserId))
+
+            // 自分自身は外せる(見守りから抜ける)。
+            assertEquals(
+                FamilyRepository.RemoveMemberResult.REMOVED,
+                FamilyRepository.removeMember(deviceId, third.familyUserId, third.familyUserId),
+            )
+            assertFalse(DeviceRepository.isMember(deviceId, third.familyUserId))
+
+            // 登録者は誰でも外せる。解除後は再び見えなくなる。
+            assertEquals(
+                FamilyRepository.RemoveMemberResult.REMOVED,
+                FamilyRepository.removeMember(deviceId, other.familyUserId, owner.familyUserId),
+            )
             assertFalse(DeviceRepository.isMember(deviceId, other.familyUserId))
             assertTrue(DeviceRepository.listForFamilyUser(other.familyUserId).none { it.deviceId == deviceId })
         }

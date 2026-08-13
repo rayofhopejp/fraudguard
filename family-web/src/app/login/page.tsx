@@ -18,7 +18,15 @@ export default function LoginPage() {
           <a href="/devices">
             <button>監視端末を見る</button>
           </a>
-          <button onClick={() => signOut()}>ログアウト</button>
+          <button
+            onClick={async () => {
+              // 先にこのアプリのセッションを消し、そのあとCognito側のセッションも切る。
+              await signOut({ redirect: false });
+              window.location.href = "/api/auth/federated-logout";
+            }}
+          >
+            ログアウト
+          </button>
         </>
       )}
 

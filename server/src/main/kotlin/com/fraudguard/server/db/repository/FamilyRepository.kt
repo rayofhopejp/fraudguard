@@ -6,15 +6,18 @@ import com.fraudguard.server.db.tables.FamilyUsers
 import com.fraudguard.server.db.tables.MonitoredDevices
 import com.fraudguard.server.db.tables.PushDevices
 import java.time.Instant
+import kotlinx.serialization.Serializable
 import java.util.UUID
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.select
 
+@Serializable
 data class FamilyMemberDto(val familyUserId: String, val displayName: String, val email: String)
 
 /** requirements.md 16.2章: 端末を共有している家族と、その人が所有者かどうか。 */
+@Serializable
 data class DeviceMemberDto(
     val familyUserId: String,
     val displayName: String,
@@ -97,21 +100,37 @@ object FamilyRepository {
         true
     }
 
+    /** removeMemberが拒否した理由。画面に出す文言を分けるために区別する。 */
+    enum class RemoveMemberResult { REMOVED, CANNOT_REMOVE_OWNER, NOT_ALLOWED }
+
     /**
-     * requirements.md 16.2章: 共有を解除する。所有者は外せない
-     * (外すと誰も管理できない端末が残る)。
+     * requirements.md 16.2章: 共有を解除する。
+     *
+     * 誰でも誰でも外せる、にはしない。この一覧は通話履歴とSMS本文を見られる人の一覧であり、
+     * 共有された人が他の家族を黙って外せると、見守りの目を減らす操作が誰にでもできてしまう。
+     *
+     *  - 端末を登録した人は、誰でも外せる
+     *  - それ以外の人は、自分だけ外せる(見守りから抜ける)
+     *  - 登録者は誰も外せない(外すと管理者のいない端末が残る)
      */
-    suspend fun removeMember(deviceId: String, familyUserId: String): Boolean = dbQuery {
+    suspend fun removeMember(
+        deviceId: String,
+        familyUserId: String,
+        actorFamilyUserId: String,
+    ): RemoveMemberResult = dbQuery {
         val ownerId = MonitoredDevices
             .slice(MonitoredDevices.ownerFamilyUserId)
             .select { MonitoredDevices.id eq deviceId }
             .firstOrNull()?.get(MonitoredDevices.ownerFamilyUserId)
-        if (ownerId == familyUserId) return@dbQuery false
+        if (ownerId == familyUserId) return@dbQuery RemoveMemberResult.CANNOT_REMOVE_OWNER
+        if (actorFamilyUserId != ownerId && actorFamilyUserId != familyUserId) {
+            return@dbQuery RemoveMemberResult.NOT_ALLOWED
+        }
 
         DeviceMembers.deleteWhere {
             it.run { (DeviceMembers.deviceId eq deviceId) and (DeviceMembers.familyUserId eq familyUserId) }
         }
-        true
+        RemoveMemberResult.REMOVED
     }
 
     suspend fun registerPushToken(familyUserId: String, fcmToken: String, platform: String) = dbQuery {

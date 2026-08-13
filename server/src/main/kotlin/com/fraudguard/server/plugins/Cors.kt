@@ -41,7 +41,12 @@ fun Application.configureCors() {
 
     install(CORS) {
         allowHost(host, schemes = listOf(url.scheme ?: "https"))
+        // GETとPOSTはCORSの安全なメソッドとして既定で通るが、DELETEは明示しないと
+        // プリフライトが通らず、ブラウザ側は "Failed to fetch" になる。
+        // 共有の解除とホワイトリストの削除がこれで動かなかった。
+        allowMethod(HttpMethod.Get)
         allowMethod(HttpMethod.Post)
+        allowMethod(HttpMethod.Delete)
         allowMethod(HttpMethod.Options)
         // 認証はAuthorizationヘッダのJWTで行う。Cookieは使わないためallowCredentialsは有効にしない。
         allowHeader(HttpHeaders.Authorization)
